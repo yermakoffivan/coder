@@ -3262,6 +3262,7 @@ describe("semantic cache operations: prefix invalidations", () => {
 		// diff, and context events do not move updated_at ordering.
 		const expectedByKind: Record<TypesGen.ChatWatchEventKind, boolean> = {
 			action_required: true,
+			capacity_change: false,
 			chat_summary_change: false,
 			context_dirty: false,
 			created: false,
@@ -3346,6 +3347,7 @@ describe("semantic cache operations: prefix invalidations", () => {
 		// by their own watch branches before the merge path runs.
 		const expectedByKind: Record<TypesGen.ChatWatchEventKind, boolean> = {
 			action_required: true,
+			capacity_change: false,
 			chat_summary_change: false,
 			context_dirty: false,
 			created: false,
