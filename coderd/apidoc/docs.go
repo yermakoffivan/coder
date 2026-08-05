@@ -17385,6 +17385,11 @@ const docTemplate = `{
                 "plan_mode": {
                     "$ref": "#/definitions/codersdk.ChatPlanMode"
                 },
+                "queued_for_capacity_at": {
+                    "description": "QueuedForCapacityAt is when the chat began waiting for a\nconcurrent-agent capacity slot. Nil unless the chat is queued.\nStatus may be running or interrupting while queued, so clients must\ncheck this field.",
+                    "type": "string",
+                    "format": "date-time"
+                },
                 "root_chat_id": {
                     "type": "string",
                     "format": "uuid"
@@ -18578,6 +18583,7 @@ const docTemplate = `{
                 "created",
                 "deleted",
                 "diff_status_change",
+                "capacity_change",
                 "action_required",
                 "context_dirty"
             ],
@@ -18589,6 +18595,7 @@ const docTemplate = `{
                 "ChatWatchEventKindCreated",
                 "ChatWatchEventKindDeleted",
                 "ChatWatchEventKindDiffStatusChange",
+                "ChatWatchEventKindCapacityChange",
                 "ChatWatchEventKindActionRequired",
                 "ChatWatchEventKindContextDirty"
             ]
