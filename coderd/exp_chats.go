@@ -4435,7 +4435,21 @@ func (api *API) resolveCreateChatModelConfigID(
 func (api *API) defaultCreateChatModelConfigID(
 	ctx context.Context,
 ) (uuid.UUID, int, *codersdk.Response) {
-	defaultModelConfig, err := api.Database.GetDefaultChatModelConfig(ctx)
+	// Chat model configs are org-scoped, but the pre-cutover request path
+	// carries no organization: every config lives in the default org, so
+	// resolve the default there. The default-org ID lookup is an internal
+	// resolution step, not user-readable data; a non-default-org member
+	// cannot read the organization object but must still resolve the
+	// deployment default.
+	//nolint:gocritic // Internal default-org resolution, scoped to this call.
+	defaultOrg, err := api.Database.GetDefaultOrganization(dbauthz.AsChatd(ctx))
+	if err != nil {
+		return uuid.Nil, http.StatusInternalServerError, &codersdk.Response{
+			Message: "Failed to resolve chat model config.",
+			Detail:  err.Error(),
+		}
+	}
+	defaultModelConfig, err := api.Database.GetDefaultChatModelConfig(ctx, defaultOrg.ID)
 	if err != nil {
 		if xerrors.Is(err, sql.ErrNoRows) {
 			return uuid.Nil, http.StatusBadRequest, &codersdk.Response{
@@ -6482,17 +6496,23 @@ func validateChatModelConfigProviderModel(aiProvider database.AIProvider, model 
 }
 
 // inChatModelConfigWriteTx runs fn in a transaction that holds the advisory
-// lock serializing chat model config writes. All writes to the table must go
-// through this helper so concurrent writers cannot act on stale reads, e.g.
-// two creates on an empty deployment both self-promoting to default and
-// violating the idx_chat_model_configs_single_default unique index.
+// lock serializing chat model config writes for one organization. All writes
+// to the table must go through this helper so concurrent writers cannot act
+// on stale reads, e.g. two creates on an empty organization both
+// self-promoting to default and violating the
+// idx_chat_model_configs_single_default unique index.
 //
 // The transaction must run at ReadCommitted. A snapshot isolation level takes
 // the snapshot at the lock statement, so a re-read inside fn would observe
 // pre-lock state and reintroduce the lost update this helper prevents.
-func (api *API) inChatModelConfigWriteTx(ctx context.Context, fn func(tx database.Store) error) error {
+func (api *API) inChatModelConfigWriteTx(
+	ctx context.Context,
+	organizationID uuid.UUID,
+	fn func(tx database.Store) error,
+) error {
 	return api.Database.InTx(func(tx database.Store) error {
-		if err := tx.AcquireLock(ctx, database.LockIDChatModelConfigWrites); err != nil {
+		lockID := database.GenLockID("chat_model_config_writes:" + organizationID.String())
+		if err := tx.AcquireLock(ctx, lockID); err != nil {
 			return xerrors.Errorf("acquire chat model config write lock: %w", err)
 		}
 		return fn(tx)
@@ -6587,6 +6607,34 @@ func (api *API) createChatModelConfig(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// The old routes are deployment-wide: configs created here belong to
+	// the default org until the org-scoped routes replace them. Seed the
+	// everyone-in-org read entry so the config stays visible to members
+	// once ACLs are enforced; the Everyone group shares the
+	// organization's ID. The default-org ID lookup is an internal
+	// resolution step, not user-readable data; the gate above already
+	// authorized the operation, and a custom role holding only
+	// deployment-config permissions cannot read the organization object.
+	//nolint:gocritic // Internal default-org resolution, scoped to this call.
+	defaultOrg, err := api.Database.GetDefaultOrganization(dbauthz.AsChatd(ctx))
+	if err != nil {
+		httpapi.Write(ctx, rw, http.StatusInternalServerError, codersdk.Response{
+			Message: "Failed to resolve default organization.",
+			Detail:  err.Error(),
+		})
+		return
+	}
+	everyoneReadACL, err := json.Marshal(database.ChatACL{
+		defaultOrg.ID.String(): {Permissions: []policy.Action{policy.ActionRead}},
+	})
+	if err != nil {
+		httpapi.Write(ctx, rw, http.StatusInternalServerError, codersdk.Response{
+			Message: "Failed to seed chat model config ACL.",
+			Detail:  err.Error(),
+		})
+		return
+	}
+
 	insertParams := database.InsertChatModelConfigParams{
 		Model:                model,
 		DisplayName:          strings.TrimSpace(req.DisplayName),
@@ -6598,10 +6646,13 @@ func (api *API) createChatModelConfig(rw http.ResponseWriter, r *http.Request) {
 		AIProviderID:         aiProviderID,
 		CreatedBy:            uuid.NullUUID{UUID: apiKey.UserID, Valid: apiKey.UserID != uuid.Nil},
 		UpdatedBy:            uuid.NullUUID{UUID: apiKey.UserID, Valid: apiKey.UserID != uuid.Nil},
+		OrganizationID:       defaultOrg.ID,
+		GroupACL:             everyoneReadACL,
+		UserACL:              json.RawMessage(`{}`),
 	}
 
 	var inserted database.ChatModelConfig
-	err = api.inChatModelConfigWriteTx(ctx, func(tx database.Store) error {
+	err = api.inChatModelConfigWriteTx(ctx, insertParams.OrganizationID, func(tx database.Store) error {
 		//nolint:gocritic // The route already authorized chat model config updates.
 		lockedAIProvider, err := tx.GetAIProviderByIDForReferenceLock(dbauthz.AsChatd(ctx), insertParams.AIProviderID.UUID)
 		if err != nil {
@@ -6619,7 +6670,7 @@ func (api *API) createChatModelConfig(rw http.ResponseWriter, r *http.Request) {
 
 		insertAsDefault := isDefault
 		if !insertAsDefault {
-			_, err := tx.GetDefaultChatModelConfig(ctx)
+			_, err := tx.GetDefaultChatModelConfig(ctx, insertParams.OrganizationID)
 			switch {
 			case err == nil:
 				// A default already exists.
@@ -6631,7 +6682,7 @@ func (api *API) createChatModelConfig(rw http.ResponseWriter, r *http.Request) {
 		}
 
 		if insertAsDefault {
-			if err := tx.UnsetDefaultChatModelConfigs(ctx); err != nil {
+			if err := tx.UnsetDefaultChatModelConfigs(ctx, insertParams.OrganizationID); err != nil {
 				return xerrors.Errorf("unset default model configs: %w", err)
 			}
 		}
@@ -6643,7 +6694,7 @@ func (api *API) createChatModelConfig(rw http.ResponseWriter, r *http.Request) {
 		}
 		inserted = config
 
-		if err := ensureDefaultChatModelConfig(ctx, tx); err != nil {
+		if err := ensureDefaultChatModelConfig(ctx, tx, insertParams.OrganizationID); err != nil {
 			return err
 		}
 
@@ -6703,7 +6754,8 @@ func (api *API) updateChatModelConfig(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if _, err := api.Database.GetChatModelConfigByID(ctx, modelConfigID); err != nil {
+	existing, err := api.Database.GetChatModelConfigByID(ctx, modelConfigID)
+	if err != nil {
 		if httpapi.Is404Error(err) {
 			httpapi.ResourceNotFound(rw)
 			return
@@ -6755,7 +6807,7 @@ func (api *API) updateChatModelConfig(rw http.ResponseWriter, r *http.Request) {
 	}
 
 	var updated database.ChatModelConfig
-	err := api.inChatModelConfigWriteTx(ctx, func(tx database.Store) error {
+	err = api.inChatModelConfigWriteTx(ctx, existing.OrganizationID, func(tx database.Store) error {
 		// The unlocked read above only rejects unknown IDs; a concurrent writer
 		// can change or delete the row between the two reads, so merge against
 		// this copy.
@@ -6835,7 +6887,7 @@ func (api *API) updateChatModelConfig(rw http.ResponseWriter, r *http.Request) {
 
 		setAsDefault := updateParams.IsDefault && !lockedExisting.IsDefault
 		if setAsDefault {
-			if err := tx.UnsetDefaultChatModelConfigs(ctx); err != nil {
+			if err := tx.UnsetDefaultChatModelConfigs(ctx, lockedExisting.OrganizationID); err != nil {
 				return xerrors.Errorf("unset default model configs: %w", err)
 			}
 		}
@@ -6856,6 +6908,7 @@ func (api *API) updateChatModelConfig(rw http.ResponseWriter, r *http.Request) {
 		if err := ensureDefaultChatModelConfig(
 			ctx,
 			tx,
+			lockedExisting.OrganizationID,
 			excludeConfigID,
 		); err != nil {
 			return err
@@ -6923,7 +6976,8 @@ func (api *API) deleteChatModelConfig(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if _, err := api.Database.GetChatModelConfigByID(ctx, modelConfigID); err != nil {
+	existing, err := api.Database.GetChatModelConfigByID(ctx, modelConfigID)
+	if err != nil {
 		if httpapi.Is404Error(err) {
 			httpapi.ResourceNotFound(rw)
 			return
@@ -6935,8 +6989,9 @@ func (api *API) deleteChatModelConfig(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := api.inChatModelConfigWriteTx(ctx, func(tx database.Store) error {
-		if _, err := tx.GetChatModelConfigByID(ctx, modelConfigID); err != nil {
+	if err := api.inChatModelConfigWriteTx(ctx, existing.OrganizationID, func(tx database.Store) error {
+		lockedExisting, err := tx.GetChatModelConfigByID(ctx, modelConfigID)
+		if err != nil {
 			if xerrors.Is(err, sql.ErrNoRows) {
 				return errChatModelConfigNotFound
 			}
@@ -6948,7 +7003,7 @@ func (api *API) deleteChatModelConfig(rw http.ResponseWriter, r *http.Request) {
 			}
 			return err
 		}
-		return ensureDefaultChatModelConfig(ctx, tx)
+		return ensureDefaultChatModelConfig(ctx, tx, lockedExisting.OrganizationID)
 	}); err != nil {
 		if xerrors.Is(err, errChatModelConfigNotFound) {
 			httpapi.ResourceNotFound(rw)
@@ -6969,9 +7024,10 @@ func (api *API) deleteChatModelConfig(rw http.ResponseWriter, r *http.Request) {
 func ensureDefaultChatModelConfig(
 	ctx context.Context,
 	tx database.Store,
+	organizationID uuid.UUID,
 	excludedConfigIDs ...uuid.UUID,
 ) error {
-	_, err := tx.GetDefaultChatModelConfig(ctx)
+	_, err := tx.GetDefaultChatModelConfig(ctx, organizationID)
 	switch {
 	case err == nil:
 		return nil
@@ -6983,7 +7039,13 @@ func ensureDefaultChatModelConfig(
 	if err != nil {
 		return xerrors.Errorf("list chat model configs: %w", err)
 	}
-	if len(modelConfigs) == 0 {
+	orgModelConfigs := make([]database.ChatModelConfig, 0, len(modelConfigs))
+	for _, config := range modelConfigs {
+		if config.OrganizationID == organizationID {
+			orgModelConfigs = append(orgModelConfigs, config)
+		}
+	}
+	if len(orgModelConfigs) == 0 {
 		return nil
 	}
 
@@ -6992,7 +7054,7 @@ func ensureDefaultChatModelConfig(
 	// omitted-model chat creation. Fall back to any non-excluded config
 	// when no usable candidate exists.
 	//nolint:gocritic // Candidate usability depends on deployment-wide provider state, not the caller's permissions.
-	enabledRows, err := tx.GetEnabledChatModelConfigs(dbauthz.AsChatd(ctx))
+	enabledRows, err := tx.GetEnabledChatModelConfigsByOrganization(dbauthz.AsChatd(ctx), organizationID)
 	if err != nil {
 		return xerrors.Errorf("list enabled chat model configs: %w", err)
 	}
@@ -7009,10 +7071,10 @@ func ensureDefaultChatModelConfig(
 		excluded[configID] = struct{}{}
 	}
 
-	candidateConfig := modelConfigs[0]
+	candidateConfig := orgModelConfigs[0]
 	var selected *database.ChatModelConfig
-	for i := range modelConfigs {
-		config := &modelConfigs[i]
+	for i := range orgModelConfigs {
+		config := &orgModelConfigs[i]
 		if _, skip := excluded[config.ID]; skip {
 			continue
 		}
@@ -7028,7 +7090,7 @@ func ensureDefaultChatModelConfig(
 		candidateConfig = *selected
 	}
 
-	if err := tx.UnsetDefaultChatModelConfigs(ctx); err != nil {
+	if err := tx.UnsetDefaultChatModelConfigs(ctx, organizationID); err != nil {
 		return xerrors.Errorf("unset default model configs: %w", err)
 	}
 

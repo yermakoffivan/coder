@@ -147,7 +147,7 @@ type shortTextCandidate struct {
 }
 
 func selectPreferredConfiguredShortTextModelConfig(
-	configs []database.GetEnabledChatModelConfigsRow,
+	configs []database.GetEnabledChatModelConfigsByOrganizationRow,
 ) (database.ChatModelConfig, bool) {
 	for _, preferred := range preferredTitleModels {
 		for _, config := range configs {

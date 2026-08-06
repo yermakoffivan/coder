@@ -17,6 +17,14 @@ Messages and queued messages no longer carry `api_key_id` columns; attribution i
 
 Deleting a synthetic key (password reset, explicit key deletion, dbpurge of long-expired keys) does not touch chat messages, queued messages, or their version fields. Chatd mints a replacement on the next request without mutating history. User suspension and deletion still block delegated gateway authorization.
 
+# Model configuration scope
+
+Chat model configs belong to organizations. Default and enabled model lookups use the chat's `organization_id`. Chatd caches default configs by organization and includes the organization ID in its singleflight key.
+
+Before the model-config cutover copies configs into every organization, a chat organization can own no configs. In that case, chatd falls back once to the default organization's configs. An organization owns configs exactly when it owns a default config, because every write path promotes one, so an organization whose configs are all disabled keeps its empty list instead of falling back. The fallback does not recurse when the requested organization is the default organization. Model-config and provider events clear all cached organization defaults because the current pubsub event does not include an organization ID.
+
+Model-config writes serialize with a transaction-scoped advisory lock derived from the organization ID, so writes in different organizations do not block each other. The partial unique index on `chat_model_configs` remains the database backstop for one live default per organization.
+
 # Core state machine
 
 The core state machine describes how a chat's execution state in the database can change over time. A fundamental component of the state machine is the set of valid **states** it can be in. We will consider 2 kinds of states: **execution states** and **ownership states**. These states let us describe what the runtime components of chatd can do with a chat at a given point in time.

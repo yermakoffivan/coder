@@ -1597,7 +1597,7 @@ func resolveSendMessageModelConfigID(
 	requested uuid.UUID,
 ) (uuid.UUID, error) {
 	if requested == uuid.Nil {
-		return resolveFallbackModelConfigID(ctx, store, chat.LastModelConfigID)
+		return resolveFallbackModelConfigID(ctx, store, chat.OrganizationID, chat.LastModelConfigID)
 	}
 
 	if err := requireEnabledChatModelConfig(ctx, store, requested); err != nil {
@@ -1648,6 +1648,7 @@ func validateCreateModelConfigID(ctx context.Context, store database.Store, mode
 func resolveFallbackModelConfigID(
 	ctx context.Context,
 	store database.Store,
+	organizationID uuid.UUID,
 	modelConfigID uuid.UUID,
 ) (uuid.UUID, error) {
 	chatdCtx := chatdModelConfigLookupContext(ctx)
@@ -1663,7 +1664,7 @@ func resolveFallbackModelConfigID(
 		}
 	}
 
-	defaultConfig, err := store.GetDefaultChatModelConfig(chatdCtx)
+	defaultConfig, err := defaultChatModelConfigForOrg(chatdCtx, store, organizationID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return uuid.Nil, ErrNoDefaultChatModelConfig
@@ -1717,6 +1718,39 @@ func validateEditTarget(ctx context.Context, store database.Store, chatID uuid.U
 		return ErrEditedMessageNotUser
 	}
 	return nil
+}
+
+// defaultChatModelConfigForOrg resolves the default model config that
+// serves organizationID. An org that owns no configs of its own reads
+// the default org's default instead, which preserves the
+// pre-org-scoping behavior where every chat saw the deployment-wide
+// configs. The default org never falls back: a miss there is a real
+// absence and returns sql.ErrNoRows.
+//
+// The returned config's OrganizationID identifies which org's configs
+// apply, so callers that need the whole list can read it from there.
+// TODO(mafredri): remove after CODAGT-709 M3 (org-scoping cutover);
+// per-org resolution becomes strict.
+func defaultChatModelConfigForOrg(
+	ctx context.Context,
+	store database.Store,
+	organizationID uuid.UUID,
+) (database.ChatModelConfig, error) {
+	config, err := store.GetDefaultChatModelConfig(ctx, organizationID)
+	if err == nil {
+		return config, nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return database.ChatModelConfig{}, err
+	}
+	defaultOrg, err := store.GetDefaultOrganization(ctx)
+	if err != nil {
+		return database.ChatModelConfig{}, err
+	}
+	if defaultOrg.ID == organizationID {
+		return database.ChatModelConfig{}, sql.ErrNoRows
+	}
+	return store.GetDefaultChatModelConfig(ctx, defaultOrg.ID)
 }
 
 // EditMessage replaces an earlier user message and discards the
@@ -1824,7 +1858,7 @@ func (p *Server) EditMessage(
 			if target.ModelConfigID.Valid {
 				preserved = target.ModelConfigID.UUID
 			}
-			resolved, err := resolveFallbackModelConfigID(ctx, store, preserved)
+			resolved, err := resolveFallbackModelConfigID(ctx, store, lockedChat.OrganizationID, preserved)
 			if err != nil {
 				return err
 			}
@@ -2801,7 +2835,10 @@ func (p *Server) resolveManualTitleModel(
 		return overrideModel, overrideConfig, nil
 	}
 
-	configs, err := store.GetEnabledChatModelConfigs(ctx)
+	configs, err := store.GetEnabledChatModelConfigsByOrganization(ctx, chat.OrganizationID)
+	if err == nil {
+		configs, err = enabledChatModelConfigsWithDefaultOrgFallback(ctx, store, chat.OrganizationID, configs)
+	}
 	if err != nil {
 		p.logger.Debug(ctx, "failed to list manual title model configs",
 			slog.F("chat_id", chat.ID),
@@ -4321,7 +4358,7 @@ func (p *Server) resolveModelConfig(
 		// Model config was deleted, fall through to default.
 	}
 
-	defaultConfig, err := p.configCache.DefaultModelConfig(ctx)
+	defaultConfig, err := p.configCache.DefaultModelConfig(ctx, chat.OrganizationID)
 	if err != nil {
 		if xerrors.Is(err, sql.ErrNoRows) {
 			return database.ChatModelConfig{}, ErrNoDefaultChatModelConfig

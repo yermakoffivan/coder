@@ -3,6 +3,7 @@ package migrations_test
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -2991,4 +2992,217 @@ func TestMigration000566OAuth2AuthMethodBackfill(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "confidential", stillConfidential,
 		"the backfill aligns the declaration to what is enforced, so the enforced value must be unchanged")
+}
+
+func TestMigration000567ChatModelConfigOrganization(t *testing.T) {
+	t.Parallel()
+
+	const migrationVersion = 567
+	const previousMigrationVersion = 566
+
+	sqlDB := testSQLDB(t)
+
+	// Migrate up to the migration before the org-scoping migration.
+	next, err := migrations.Stepper(sqlDB)
+	require.NoError(t, err)
+	for {
+		version, more, err := next()
+		require.NoError(t, err)
+		if !more {
+			t.Fatalf("migration %d not found", previousMigrationVersion)
+		}
+		if version == previousMigrationVersion {
+			break
+		}
+	}
+
+	ctx := testutil.Context(t, testutil.WaitSuperLong)
+
+	providerID := uuid.New()
+	defaultConfigID := uuid.New()
+	plainConfigID := uuid.New()
+	deletedConfigID := uuid.New()
+	now := time.Now().UTC().Truncate(time.Microsecond)
+
+	fixtures := []struct {
+		query string
+		args  []any
+	}{
+		{
+			`INSERT INTO ai_providers (id, type, name, enabled, base_url, created_at, updated_at)
+			VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+			[]any{providerID, "openai", "openai-567", true, "https://api.openai.com/v1", now, now},
+		},
+		// The deployment's single live default config.
+		{
+			`INSERT INTO chat_model_configs (id, model, display_name, enabled, is_default, context_limit, compression_threshold, ai_provider_id, created_at, updated_at)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+			[]any{defaultConfigID, "gpt-5.2", "Default 567", true, true, 200000, 70, providerID, now, now},
+		},
+		// A live non-default config.
+		{
+			`INSERT INTO chat_model_configs (id, model, display_name, enabled, is_default, context_limit, compression_threshold, ai_provider_id, created_at, updated_at)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+			[]any{plainConfigID, "gpt-5.2-mini", "Plain 567", true, false, 128000, 70, providerID, now, now},
+		},
+		// A soft-deleted config: backfilled and ACL-seeded like any row,
+		// while staying outside the partial default index.
+		{
+			`INSERT INTO chat_model_configs (id, model, display_name, enabled, is_default, deleted, deleted_at, context_limit, compression_threshold, ai_provider_id, created_at, updated_at)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+			[]any{deletedConfigID, "gpt-4-legacy", "Deleted 567", false, false, true, now, 128000, 70, providerID, now, now},
+		},
+	}
+
+	tx, err := sqlDB.BeginTx(ctx, nil)
+	require.NoError(t, err)
+	defer tx.Rollback()
+	for i, f := range fixtures {
+		_, err := tx.ExecContext(ctx, f.query, f.args...)
+		require.NoError(t, err, "fixture %d", i)
+	}
+	require.NoError(t, tx.Commit())
+
+	// Run the migration.
+	version, _, err := next()
+	require.NoError(t, err)
+	require.EqualValues(t, migrationVersion, version)
+
+	var defaultOrgID uuid.UUID
+	err = sqlDB.QueryRowContext(ctx,
+		"SELECT id FROM organizations WHERE is_default = true",
+	).Scan(&defaultOrgID)
+	require.NoError(t, err)
+
+	// Every row, including the soft-deleted one, is backfilled to the
+	// default org.
+	var backfilled int
+	err = sqlDB.QueryRowContext(ctx,
+		"SELECT COUNT(*) FROM chat_model_configs WHERE organization_id = $1", defaultOrgID,
+	).Scan(&backfilled)
+	require.NoError(t, err)
+	require.Equal(t, 3, backfilled, "all fixture rows should be backfilled to the default org")
+
+	var notNullViolation bool
+	err = sqlDB.QueryRowContext(ctx,
+		"SELECT EXISTS(SELECT 1 FROM chat_model_configs WHERE organization_id IS NULL)",
+	).Scan(&notNullViolation)
+	require.NoError(t, err)
+	require.False(t, notNullViolation, "no row may keep a NULL organization_id")
+
+	// Every row's group_acl is seeded with the everyone-in-org read
+	// entry keyed by the org ID (the Everyone group shares the org ID).
+	seededACL := map[string]any{
+		defaultOrgID.String(): map[string]any{"permissions": []string{"read"}},
+	}
+	for _, id := range []uuid.UUID{defaultConfigID, plainConfigID, deletedConfigID} {
+		var groupACL []byte
+		err = sqlDB.QueryRowContext(ctx,
+			"SELECT group_acl FROM chat_model_configs WHERE id = $1", id,
+		).Scan(&groupACL)
+		require.NoError(t, err)
+		require.JSONEq(t, string(mustJSON(t, seededACL)), string(groupACL),
+			"group_acl should carry the everyone-in-org read entry")
+	}
+
+	// The single-default index is now keyed per organization: the index
+	// definition references organization_id and keeps its predicate.
+	var indexDef string
+	err = sqlDB.QueryRowContext(ctx,
+		"SELECT indexdef FROM pg_indexes WHERE indexname = 'idx_chat_model_configs_single_default'",
+	).Scan(&indexDef)
+	require.NoError(t, err)
+	require.Contains(t, indexDef, "organization_id")
+	require.Contains(t, indexDef, "is_default = true")
+	require.Contains(t, indexDef, "deleted = false")
+
+	// The org lookup index exists.
+	var orgIndexExists bool
+	err = sqlDB.QueryRowContext(ctx,
+		"SELECT EXISTS(SELECT 1 FROM pg_indexes WHERE indexname = 'idx_chat_model_configs_organization_id')",
+	).Scan(&orgIndexExists)
+	require.NoError(t, err)
+	require.True(t, orgIndexExists)
+
+	// The default org can host only one live default: a second insert
+	// violates the per-org partial unique index.
+	_, err = sqlDB.ExecContext(ctx,
+		`INSERT INTO chat_model_configs (id, model, display_name, enabled, is_default, context_limit, compression_threshold, ai_provider_id, organization_id, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+		uuid.New(), "gpt-5.2-alt", "Second Default 567", true, true, 200000, 70, providerID, defaultOrgID, now, now,
+	)
+	require.Error(t, err, "a second live default in the same org must be rejected")
+	require.Contains(t, err.Error(), "idx_chat_model_configs_single_default")
+
+	// A second org can host its own live default.
+	secondOrgID := uuid.New()
+	secondOrgDefaultConfigID := uuid.New()
+	_, err = sqlDB.ExecContext(ctx,
+		`INSERT INTO organizations (id, name, description, display_name, default_org_member_roles, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+		secondOrgID, "second-org-567", "", "", pq.StringArray{}, now, now,
+	)
+	require.NoError(t, err)
+	_, err = sqlDB.ExecContext(ctx,
+		`INSERT INTO chat_model_configs (id, model, display_name, enabled, is_default, context_limit, compression_threshold, ai_provider_id, organization_id, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+		secondOrgDefaultConfigID, "gpt-5.2-org2", "Second Org Default 567", true, true, 200000, 70, providerID, secondOrgID, now, now,
+	)
+	require.NoError(t, err, "each org can host its own live default")
+
+	// The ACL object CHECKs reject non-object values.
+	_, err = sqlDB.ExecContext(ctx,
+		`INSERT INTO chat_model_configs (id, model, display_name, enabled, context_limit, compression_threshold, ai_provider_id, organization_id, group_acl, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, '[]'::jsonb, $9, $10)`,
+		uuid.New(), "bad-acl", "Bad ACL 567", true, 128000, 70, providerID, secondOrgID, now, now,
+	)
+	require.Error(t, err, "non-object group_acl must be rejected")
+
+	var rowCountBeforeDown int
+	err = sqlDB.QueryRowContext(ctx, "SELECT COUNT(*) FROM chat_model_configs").Scan(&rowCountBeforeDown)
+	require.NoError(t, err)
+
+	downSQL, err := os.ReadFile("000567_chat_model_config_organization.down.sql")
+	require.NoError(t, err)
+	_, err = sqlDB.ExecContext(ctx, string(downSQL))
+	require.NoError(t, err)
+
+	var defaultOrgIsDefault bool
+	err = sqlDB.QueryRowContext(ctx,
+		"SELECT is_default FROM chat_model_configs WHERE id = $1", defaultConfigID,
+	).Scan(&defaultOrgIsDefault)
+	require.NoError(t, err)
+	require.True(t, defaultOrgIsDefault)
+
+	var secondOrgIsDefault bool
+	err = sqlDB.QueryRowContext(ctx,
+		"SELECT is_default FROM chat_model_configs WHERE id = $1", secondOrgDefaultConfigID,
+	).Scan(&secondOrgIsDefault)
+	require.NoError(t, err)
+	require.False(t, secondOrgIsDefault)
+
+	var rowCountAfterDown int
+	err = sqlDB.QueryRowContext(ctx, "SELECT COUNT(*) FROM chat_model_configs").Scan(&rowCountAfterDown)
+	require.NoError(t, err)
+	require.Equal(t, rowCountBeforeDown, rowCountAfterDown)
+
+	err = sqlDB.QueryRowContext(ctx,
+		"SELECT indexdef FROM pg_indexes WHERE indexname = 'idx_chat_model_configs_single_default'",
+	).Scan(&indexDef)
+	require.NoError(t, err)
+	require.Contains(t, indexDef, "((1))")
+
+	upSQL, err := os.ReadFile("000567_chat_model_config_organization.up.sql")
+	require.NoError(t, err)
+	_, err = sqlDB.ExecContext(ctx, string(upSQL))
+	require.NoError(t, err)
+}
+
+// mustJSON marshals a value for JSONEq comparisons, failing the test on
+// error.
+func mustJSON(t *testing.T, v any) []byte {
+	t.Helper()
+	raw, err := json.Marshal(v)
+	require.NoError(t, err)
+	return raw
 }
