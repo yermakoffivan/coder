@@ -16615,13 +16615,8 @@
 		},
 		"codersdk.ChatRole": {
 			"type": "string",
-			"enum": ["read", "", "read", ""],
-			"x-enum-varnames": [
-				"MCPServerConfigRoleRead",
-				"MCPServerConfigRoleDeleted",
-				"ChatRoleRead",
-				"ChatRoleDeleted"
-			]
+			"enum": ["read", ""],
+			"x-enum-varnames": ["ChatRoleRead", "ChatRoleDeleted"]
 		},
 		"codersdk.ChatStatus": {
 			"type": "string",
@@ -19615,12 +19610,10 @@
 		},
 		"codersdk.MCPServerConfigRole": {
 			"type": "string",
-			"enum": ["read", "", "read", ""],
+			"enum": ["read", ""],
 			"x-enum-varnames": [
 				"MCPServerConfigRoleRead",
-				"MCPServerConfigRoleDeleted",
-				"ChatRoleRead",
-				"ChatRoleDeleted"
+				"MCPServerConfigRoleDeleted"
 			]
 		},
 		"codersdk.MCPServerConfigUser": {
