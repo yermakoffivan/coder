@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
+	"github.com/coder/coder/v2/coderd/audit"
 	"github.com/coder/coder/v2/coderd/coderdtest"
 	"github.com/coder/coder/v2/coderd/database"
 	"github.com/coder/coder/v2/coderd/database/dbauthz"
@@ -101,7 +102,11 @@ func TestMCPServerConfigCollectionOrganizationIsolation(t *testing.T) {
 func TestMCPServerConfigItemCrossOrganizationConcealment(t *testing.T) {
 	t.Parallel()
 
+	mAudit := audit.NewMock()
 	client, firstUser := coderdenttest.New(t, &coderdenttest.Options{
+		Options: &coderdtest.Options{
+			Auditor: mAudit,
+		},
 		LicenseOptions: &coderdenttest.LicenseOptions{
 			Features: license.Features{
 				codersdk.FeatureMultipleOrganizations: 1,
@@ -111,6 +116,9 @@ func TestMCPServerConfigItemCrossOrganizationConcealment(t *testing.T) {
 	secondOrg := coderdenttest.CreateOrganization(t, client, coderdenttest.CreateOrganizationOptions{})
 	otherClient, _ := coderdtest.CreateAnotherUser(t, client, secondOrg.ID)
 	config := createMCPServerConfigForOrganization(t, client, firstUser.OrganizationID, "private-org-one-mcp")
+	// Drop the audited setup create so the subtests can assert the
+	// denied requests below record nothing.
+	mAudit.ResetLogs()
 
 	configPath := "/api/experimental/mcp-servers/" + config.ID.String()
 	for _, test := range []struct {
@@ -139,6 +147,13 @@ func TestMCPServerConfigItemCrossOrganizationConcealment(t *testing.T) {
 				wantStatus = http.StatusNotFound
 			}
 			requireMCPServerConfigRequestStatus(t, otherClient, test.method, test.path, test.body, wantStatus)
+
+			// The read-denied 404 comes from the param middleware before
+			// any mutation handler runs, so no audit entry is recorded
+			// for the concealed config.
+			for _, log := range mAudit.AuditLogs() {
+				require.NotEqual(t, database.ResourceTypeMCPServerConfig, log.ResourceType)
+			}
 		})
 	}
 

@@ -24587,6 +24587,7 @@ const docTemplate = `{
                 "group_ai_budget",
                 "user_ai_budget_override",
                 "chat",
+                "mcp_server_config",
                 "user_secret",
                 "user_skill"
             ],
@@ -24625,6 +24626,7 @@ const docTemplate = `{
                 "ResourceTypeGroupAIBudget",
                 "ResourceTypeUserAIBudgetOverride",
                 "ResourceTypeChat",
+                "ResourceTypeMCPServerConfig",
                 "ResourceTypeUserSecret",
                 "ResourceTypeUserSkill"
             ]
