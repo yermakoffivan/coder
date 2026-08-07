@@ -1355,7 +1355,10 @@ func New(options *Options) *API {
 			})
 		})
 		r.Route("/mcp-servers/{mcpserverconfig}", func(r chi.Router) {
-			r.Use(apiKeyMiddleware)
+			r.Use(
+				apiKeyMiddleware,
+				httpmw.ExtractMCPServerConfigParam(options.Database),
+			)
 			r.Get("/", api.getMCPServerConfig)
 			r.Patch("/", api.updateMCPServerConfig)
 			r.Delete("/", api.deleteMCPServerConfig)
