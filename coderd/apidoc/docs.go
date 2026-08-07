@@ -1101,7 +1101,7 @@ const docTemplate = `{
                 ]
             }
         },
-        "/api/experimental/mcp-servers/{mcpserverconfig}": {
+        "/api/experimental/mcp-servers/{mcpserverconfig}/acl": {
             "get": {
                 "produces": [
                     "application/json"
@@ -1109,8 +1109,8 @@ const docTemplate = `{
                 "tags": [
                     "MCP"
                 ],
-                "summary": "Get MCP server config",
-                "operationId": "get-mcp-server-config",
+                "summary": "Get MCP server config ACL",
+                "operationId": "get-mcp-server-config-acl",
                 "parameters": [
                     {
                         "type": "string",
@@ -1125,38 +1125,8 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/codersdk.MCPServerConfig"
+                            "$ref": "#/definitions/codersdk.MCPServerConfigACL"
                         }
-                    }
-                },
-                "security": [
-                    {
-                        "CoderSessionToken": []
-                    }
-                ],
-                "x-apidocgen": {
-                    "skip": true
-                }
-            },
-            "delete": {
-                "tags": [
-                    "MCP"
-                ],
-                "summary": "Delete MCP server config",
-                "operationId": "delete-mcp-server-config",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "format": "uuid",
-                        "description": "MCP server config ID",
-                        "name": "mcpserverconfig",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "204": {
-                        "description": "No Content"
                     }
                 },
                 "security": [
@@ -1172,14 +1142,11 @@ const docTemplate = `{
                 "consumes": [
                     "application/json"
                 ],
-                "produces": [
-                    "application/json"
-                ],
                 "tags": [
                     "MCP"
                 ],
-                "summary": "Update MCP server config",
-                "operationId": "update-mcp-server-config",
+                "summary": "Update MCP server config ACL",
+                "operationId": "update-mcp-server-config-acl",
                 "parameters": [
                     {
                         "type": "string",
@@ -1190,215 +1157,18 @@ const docTemplate = `{
                         "required": true
                     },
                     {
-                        "description": "Update MCP server config request",
+                        "description": "Update MCP server config ACL request",
                         "name": "request",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/codersdk.UpdateMCPServerConfigRequest"
+                            "$ref": "#/definitions/codersdk.UpdateMCPServerConfigACLRequest"
                         }
                     }
                 ],
                 "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/codersdk.MCPServerConfig"
-                        }
-                    }
-                },
-                "security": [
-                    {
-                        "CoderSessionToken": []
-                    }
-                ],
-                "x-apidocgen": {
-                    "skip": true
-                }
-            }
-        },
-        "/api/experimental/mcp-servers/{mcpserverconfig}/oauth2/connect": {
-            "get": {
-                "tags": [
-                    "MCP"
-                ],
-                "summary": "Initiate MCP server OAuth2 connect",
-                "operationId": "initiate-mcp-server-oauth2-connect",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "format": "uuid",
-                        "description": "MCP server config ID",
-                        "name": "mcpserverconfig",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "307": {
-                        "description": "Temporary Redirect"
-                    }
-                },
-                "security": [
-                    {
-                        "CoderSessionToken": []
-                    }
-                ],
-                "x-apidocgen": {
-                    "skip": true
-                }
-            }
-        },
-        "/api/experimental/mcp-servers/{mcpserverconfig}/oauth2/disconnect": {
-            "delete": {
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "MCP"
-                ],
-                "summary": "Disconnect MCP server OAuth2 token",
-                "operationId": "disconnect-mcp-server-oauth2-token",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "format": "uuid",
-                        "description": "MCP server config ID",
-                        "name": "mcpserverconfig",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/codersdk.MCPServerOAuth2DisconnectResponse"
-                        }
-                    }
-                },
-                "security": [
-                    {
-                        "CoderSessionToken": []
-                    }
-                ],
-                "x-apidocgen": {
-                    "skip": true
-                }
-            }
-        },
-        "/api/experimental/mcp/servers/{mcpServer}/oauth2/callback": {
-            "get": {
-                "produces": [
-                    "text/html"
-                ],
-                "tags": [
-                    "MCP"
-                ],
-                "summary": "Handle MCP server OAuth2 callback",
-                "operationId": "handle-mcp-server-oauth2-callback",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "format": "uuid",
-                        "description": "MCP server config ID",
-                        "name": "mcpServer",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK"
-                    }
-                },
-                "security": [
-                    {
-                        "CoderSessionToken": []
-                    }
-                ],
-                "x-apidocgen": {
-                    "skip": true
-                }
-            }
-        },
-        "/api/experimental/organizations/{organization}/mcp-servers": {
-            "get": {
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "MCP"
-                ],
-                "summary": "List MCP server configs",
-                "operationId": "list-mcp-server-configs",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "format": "uuid",
-                        "description": "Organization ID",
-                        "name": "organization",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/codersdk.MCPServerConfig"
-                            }
-                        }
-                    }
-                },
-                "security": [
-                    {
-                        "CoderSessionToken": []
-                    }
-                ],
-                "x-apidocgen": {
-                    "skip": true
-                }
-            },
-            "post": {
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "MCP"
-                ],
-                "summary": "Create MCP server config",
-                "operationId": "create-mcp-server-config",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "format": "uuid",
-                        "description": "Organization ID",
-                        "name": "organization",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "Create MCP server config request",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/codersdk.CreateMCPServerConfigRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "Created",
-                        "schema": {
-                            "$ref": "#/definitions/codersdk.MCPServerConfig"
-                        }
+                    "204": {
+                        "description": "No Content"
                     }
                 },
                 "security": [
@@ -18652,9 +18422,13 @@ const docTemplate = `{
             "type": "string",
             "enum": [
                 "read",
+                "",
+                "read",
                 ""
             ],
             "x-enum-varnames": [
+                "MCPServerConfigRoleRead",
+                "MCPServerConfigRoleDeleted",
                 "ChatRoleRead",
                 "ChatRoleDeleted"
             ]
@@ -19383,115 +19157,6 @@ const docTemplate = `{
                 },
                 "quota_allowance": {
                     "type": "integer"
-                }
-            }
-        },
-        "codersdk.CreateMCPServerConfigRequest": {
-            "type": "object",
-            "required": [
-                "auth_type",
-                "availability",
-                "display_name",
-                "slug",
-                "transport",
-                "url"
-            ],
-            "properties": {
-                "allow_in_plan_mode": {
-                    "type": "boolean"
-                },
-                "api_key_header": {
-                    "type": "string"
-                },
-                "api_key_value": {
-                    "type": "string"
-                },
-                "auth_type": {
-                    "type": "string",
-                    "enum": [
-                        "none",
-                        "oauth2",
-                        "api_key",
-                        "custom_headers",
-                        "user_oidc"
-                    ]
-                },
-                "availability": {
-                    "type": "string",
-                    "enum": [
-                        "force_on",
-                        "default_on",
-                        "default_off"
-                    ]
-                },
-                "custom_headers": {
-                    "type": "object",
-                    "additionalProperties": {
-                        "type": "string"
-                    }
-                },
-                "description": {
-                    "type": "string"
-                },
-                "display_name": {
-                    "type": "string"
-                },
-                "enabled": {
-                    "type": "boolean"
-                },
-                "forward_coder_headers": {
-                    "description": "ForwardCoderHeaders, when true, forwards Coder identity\nheaders on every outgoing MCP request. See MCPServerConfig.",
-                    "type": "boolean"
-                },
-                "icon_url": {
-                    "type": "string"
-                },
-                "model_intent": {
-                    "type": "boolean"
-                },
-                "oauth2_auth_url": {
-                    "type": "string"
-                },
-                "oauth2_client_id": {
-                    "type": "string"
-                },
-                "oauth2_client_secret": {
-                    "type": "string"
-                },
-                "oauth2_revocation_url": {
-                    "description": "OAuth2RevocationURL is the provider's RFC 7009 revocation\nendpoint; auto-populated by OAuth2 discovery when omitted.",
-                    "type": "string"
-                },
-                "oauth2_scopes": {
-                    "type": "string"
-                },
-                "oauth2_token_url": {
-                    "type": "string"
-                },
-                "slug": {
-                    "type": "string"
-                },
-                "tool_allow_list": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "tool_deny_list": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "transport": {
-                    "type": "string",
-                    "enum": [
-                        "streamable_http",
-                        "sse"
-                    ]
-                },
-                "url": {
-                    "type": "string"
                 }
             }
         },
@@ -21808,121 +21473,123 @@ const docTemplate = `{
                 }
             }
         },
-        "codersdk.MCPServerConfig": {
+        "codersdk.MCPServerConfigACL": {
             "type": "object",
             "properties": {
-                "allow_in_plan_mode": {
-                    "type": "boolean"
+                "groups": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/codersdk.MCPServerConfigGroup"
+                    }
                 },
-                "api_key_header": {
-                    "description": "API key fields (only populated for admins).",
-                    "type": "string"
-                },
-                "auth_connected": {
-                    "description": "Per-user state (populated for non-admin requests).",
-                    "type": "boolean"
-                },
-                "auth_type": {
-                    "description": "\"none\", \"oauth2\", \"api_key\", \"custom_headers\", \"user_oidc\"",
-                    "type": "string"
-                },
-                "availability": {
-                    "description": "Availability policy set by admin.",
-                    "type": "string"
-                },
-                "created_at": {
+                "users": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/codersdk.MCPServerConfigUser"
+                    }
+                }
+            }
+        },
+        "codersdk.MCPServerConfigGroup": {
+            "type": "object",
+            "properties": {
+                "avatar_url": {
                     "type": "string",
-                    "format": "date-time"
-                },
-                "description": {
-                    "type": "string"
+                    "format": "uri"
                 },
                 "display_name": {
-                    "type": "string"
-                },
-                "enabled": {
-                    "type": "boolean"
-                },
-                "forward_coder_headers": {
-                    "description": "ForwardCoderHeaders forwards the same Coder identity headers we\nsend to LLM providers (X-Coder-Owner-Id, X-Coder-Chat-Id, and the\noptional X-Coder-Subchat-Id and X-Coder-Workspace-Id) to this\nMCP server on every request. Off by default to avoid leaking\nchat identity to third-party servers.",
-                    "type": "boolean"
-                },
-                "has_api_key": {
-                    "type": "boolean"
-                },
-                "has_custom_headers": {
-                    "type": "boolean"
-                },
-                "has_oauth2_secret": {
-                    "type": "boolean"
-                },
-                "icon_url": {
                     "type": "string"
                 },
                 "id": {
                     "type": "string",
                     "format": "uuid"
                 },
-                "model_intent": {
-                    "type": "boolean"
+                "members": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/codersdk.ReducedUser"
+                    }
                 },
-                "oauth2_auth_url": {
+                "name": {
                     "type": "string"
                 },
-                "oauth2_client_id": {
-                    "description": "OAuth2 fields (only populated for admins).",
-                    "type": "string"
-                },
-                "oauth2_revocation_url": {
-                    "type": "string"
-                },
-                "oauth2_scopes": {
-                    "type": "string"
-                },
-                "oauth2_token_url": {
+                "organization_display_name": {
                     "type": "string"
                 },
                 "organization_id": {
                     "type": "string",
                     "format": "uuid"
                 },
-                "slug": {
+                "organization_name": {
                     "type": "string"
                 },
-                "tool_allow_list": {
-                    "description": "Tool governance.",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
+                "quota_allowance": {
+                    "type": "integer"
                 },
-                "tool_deny_list": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
+                "role": {
+                    "enum": [
+                        "read"
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/codersdk.MCPServerConfigRole"
+                        }
+                    ]
                 },
-                "transport": {
-                    "description": "\"streamable_http\" or \"sse\"",
-                    "type": "string"
+                "source": {
+                    "$ref": "#/definitions/codersdk.GroupSource"
                 },
-                "updated_at": {
-                    "type": "string",
-                    "format": "date-time"
-                },
-                "url": {
-                    "type": "string"
+                "total_member_count": {
+                    "description": "How many members are in this group. Shows the total count,\neven if the user is not authorized to read group member details.\nMay be greater than ` + "`" + `len(Group.Members)` + "`" + `.",
+                    "type": "integer"
                 }
             }
         },
-        "codersdk.MCPServerOAuth2DisconnectResponse": {
+        "codersdk.MCPServerConfigRole": {
+            "type": "string",
+            "enum": [
+                "read",
+                "",
+                "read",
+                ""
+            ],
+            "x-enum-varnames": [
+                "MCPServerConfigRoleRead",
+                "MCPServerConfigRoleDeleted",
+                "ChatRoleRead",
+                "ChatRoleDeleted"
+            ]
+        },
+        "codersdk.MCPServerConfigUser": {
             "type": "object",
+            "required": [
+                "id",
+                "username"
+            ],
             "properties": {
-                "token_revocation_error": {
+                "avatar_url": {
+                    "type": "string",
+                    "format": "uri"
+                },
+                "id": {
+                    "type": "string",
+                    "format": "uuid"
+                },
+                "name": {
                     "type": "string"
                 },
-                "token_revoked": {
-                    "type": "boolean"
+                "role": {
+                    "enum": [
+                        "read"
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/codersdk.MCPServerConfigRole"
+                        }
+                    ]
+                },
+                "username": {
+                    "type": "string"
                 }
             }
         },
@@ -26596,104 +26263,20 @@ const docTemplate = `{
                 }
             }
         },
-        "codersdk.UpdateMCPServerConfigRequest": {
+        "codersdk.UpdateMCPServerConfigACLRequest": {
             "type": "object",
             "properties": {
-                "allow_in_plan_mode": {
-                    "type": "boolean"
-                },
-                "api_key_header": {
-                    "type": "string"
-                },
-                "api_key_value": {
-                    "type": "string"
-                },
-                "auth_type": {
-                    "type": "string",
-                    "enum": [
-                        "none",
-                        "oauth2",
-                        "api_key",
-                        "custom_headers",
-                        "user_oidc"
-                    ]
-                },
-                "availability": {
-                    "type": "string",
-                    "enum": [
-                        "force_on",
-                        "default_on",
-                        "default_off"
-                    ]
-                },
-                "custom_headers": {
+                "group_roles": {
                     "type": "object",
                     "additionalProperties": {
-                        "type": "string"
+                        "$ref": "#/definitions/codersdk.MCPServerConfigRole"
                     }
                 },
-                "description": {
-                    "type": "string"
-                },
-                "display_name": {
-                    "type": "string"
-                },
-                "enabled": {
-                    "type": "boolean"
-                },
-                "forward_coder_headers": {
-                    "description": "ForwardCoderHeaders, when set, updates whether Coder identity\nheaders are forwarded on every outgoing MCP request.",
-                    "type": "boolean"
-                },
-                "icon_url": {
-                    "type": "string"
-                },
-                "model_intent": {
-                    "type": "boolean"
-                },
-                "oauth2_auth_url": {
-                    "type": "string"
-                },
-                "oauth2_client_id": {
-                    "type": "string"
-                },
-                "oauth2_client_secret": {
-                    "type": "string"
-                },
-                "oauth2_revocation_url": {
-                    "description": "OAuth2RevocationURL is validated in the handler because a\nvalidate tag would reject the pointer to \"\" that clears it.",
-                    "type": "string"
-                },
-                "oauth2_scopes": {
-                    "type": "string"
-                },
-                "oauth2_token_url": {
-                    "type": "string"
-                },
-                "slug": {
-                    "type": "string"
-                },
-                "tool_allow_list": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
+                "user_roles": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "$ref": "#/definitions/codersdk.MCPServerConfigRole"
                     }
-                },
-                "tool_deny_list": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "transport": {
-                    "type": "string",
-                    "enum": [
-                        "streamable_http",
-                        "sse"
-                    ]
-                },
-                "url": {
-                    "type": "string"
                 }
             }
         },
