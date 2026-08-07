@@ -116,8 +116,6 @@ func TestMCPServerConfigItemCrossOrganizationConcealment(t *testing.T) {
 	secondOrg := coderdenttest.CreateOrganization(t, client, coderdenttest.CreateOrganizationOptions{})
 	otherClient, _ := coderdtest.CreateAnotherUser(t, client, secondOrg.ID)
 	config := createMCPServerConfigForOrganization(t, client, firstUser.OrganizationID, "private-org-one-mcp")
-	// Drop the audited setup create so the subtests can assert the
-	// denied requests below record nothing.
 	mAudit.ResetLogs()
 
 	configPath := "/api/experimental/mcp-servers/" + config.ID.String()
@@ -148,9 +146,9 @@ func TestMCPServerConfigItemCrossOrganizationConcealment(t *testing.T) {
 			}
 			requireMCPServerConfigRequestStatus(t, otherClient, test.method, test.path, test.body, wantStatus)
 
-			// The read-denied 404 comes from the param middleware before
-			// any mutation handler runs, so no audit entry is recorded
-			// for the concealed config.
+			// Read-gated routes 404 in the param middleware before any
+			// handler runs, and disconnect does not audit, so nothing
+			// is audited.
 			for _, log := range mAudit.AuditLogs() {
 				require.NotEqual(t, database.ResourceTypeMCPServerConfig, log.ResourceType)
 			}
