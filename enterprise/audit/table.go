@@ -524,6 +524,8 @@ var auditableResourcesTypes = map[any]map[string]Action{
 		"model_intent":                ActionTrack,
 		"allow_in_plan_mode":          ActionTrack,
 		"forward_coder_headers":       ActionTrack,
+		"group_acl":                   ActionTrack,
+		"user_acl":                    ActionTrack,
 		"oauth2_revocation_url":       ActionSecret, // May embed credentials in userinfo or query
 		"organization_id":             ActionIgnore,
 	},
