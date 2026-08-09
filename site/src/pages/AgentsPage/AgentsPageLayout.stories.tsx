@@ -58,6 +58,7 @@ const defaultModelConfigID = "model-config-1";
 
 const defaultModelConfigs: TypesGen.ChatModel[] = [
 	{
+		organization_id: "00000000-0000-0000-0000-000000000000",
 		id: defaultModelConfigID,
 		ai_provider_id: "provider-openai",
 		model: "gpt-4o",
@@ -349,6 +350,7 @@ const meta: Meta<typeof AgentsPageLayout> = {
 		});
 		spyOn(API.experimental, "getChatModelConfigs").mockResolvedValue([
 			{
+				organization_id: "00000000-0000-0000-0000-000000000000",
 				id: defaultModelConfigID,
 				ai_provider_id: "provider-openai",
 				model: "gpt-4o",

@@ -77,9 +77,11 @@ func TestScaleTestChat(t *testing.T) {
 	require.Equal(t, mockURL, provider.BaseURL)
 
 	expClient := codersdk.NewExperimentalClient(client)
-	configs, err := expClient.ListChatModelConfigs(ctx)
+	defaultOrg, err := client.OrganizationByName(ctx, codersdk.DefaultOrganization)
 	require.NoError(t, err)
-	matchingConfigs := scaletestModelConfigsForProvider(configs, provider.ID)
+	configs, err := expClient.ChatModels(ctx, defaultOrg.ID)
+	require.NoError(t, err)
+	matchingConfigs := scaletestModelConfigsForProvider(configs.Models, provider.ID)
 	require.Len(t, matchingConfigs, 1)
 	require.True(t, matchingConfigs[0].Enabled)
 

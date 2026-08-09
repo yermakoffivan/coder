@@ -2758,10 +2758,11 @@ export interface ChatMessagesResponse {
 
 // From codersdk/chats.go
 /**
- * ChatModel is an admin-managed model configuration.
+ * ChatModel is an org-scoped model configuration.
  */
 export interface ChatModel {
 	readonly id: string;
+	readonly organization_id: string;
 	readonly ai_provider_id: string;
 	readonly model: string;
 	readonly display_name: string;
@@ -2975,6 +2976,25 @@ export interface ChatModelProvider {
 	readonly available: boolean;
 	readonly unavailable_reason?: ChatModelProviderUnavailableReason;
 	readonly models: readonly MinimalChatModel[];
+}
+
+// From codersdk/chats.go
+/**
+ * ChatModelProviderDescriptor is the redacted view of an AI provider carried
+ * on the org model collection response. It carries only the capability
+ * metadata the Models UI needs; key material, base URLs, and headers are
+ * never exposed. The fields mirror what /api/experimental/chats/models
+ * already discloses to any authenticated caller.
+ */
+export interface ChatModelProviderDescriptor {
+	readonly id: string;
+	readonly type: string;
+	readonly display_name: string;
+	readonly icon: string;
+	readonly enabled: boolean;
+	readonly has_api_key: boolean;
+	readonly has_user_api_key: boolean;
+	readonly allow_user_api_key: boolean;
 }
 
 // From codersdk/chats.go
@@ -6061,7 +6081,9 @@ export const MaxUserSecretsTotalValueBytes = 204800; // 200 KiB
 
 // From codersdk/chats.go
 /**
- * MinimalChatModel represents a model in the chat model catalog.
+ * MinimalChatModel is the runtime catalog view of a model. Its ID is the
+ * synthetic catalog identity `provider:model` built by canonicalModelID, not
+ * the chat_model_configs row UUID that ChatModel.ID carries.
  */
 export interface MinimalChatModel {
 	readonly id: string;
@@ -6819,6 +6841,17 @@ export interface Organization extends MinimalOrganization {
 	 * next request.
 	 */
 	readonly default_org_member_roles: readonly string[];
+}
+
+// From codersdk/chats.go
+/**
+ * OrganizationChatModelsResponse is the org chat model config collection:
+ * the caller-readable configs plus the redacted provider descriptors the
+ * authoring page needs.
+ */
+export interface OrganizationChatModelsResponse {
+	readonly models: readonly ChatModel[];
+	readonly providers: readonly ChatModelProviderDescriptor[];
 }
 
 // From codersdk/aibridge.go

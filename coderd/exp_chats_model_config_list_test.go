@@ -19,8 +19,7 @@ import (
 )
 
 // TestChatModelConfigListReadContracts pins the visible config set for each
-// role while enabled configs remain deployment-wide and management reads use
-// the chat_model_config authorization filter.
+// role after chat model config reads become organization-scoped.
 func TestChatModelConfigListReadContracts(t *testing.T) {
 	t.Parallel()
 
@@ -62,82 +61,44 @@ func TestChatModelConfigListReadContracts(t *testing.T) {
 	require.True(t, otherEnabled.Enabled)
 
 	testCases := []struct {
-		name    string
-		client  func(t *testing.T, ctx context.Context) *codersdk.ExperimentalClient
-		visible []uuid.UUID
-		hidden  []uuid.UUID
+		name   string
+		client func(t *testing.T, ctx context.Context) *codersdk.ExperimentalClient
 	}{
 		{
-			name: "OwnerSeesAllConfigs",
+			name: "Owner",
 			client: func(*testing.T, context.Context) *codersdk.ExperimentalClient {
 				return client
 			},
-			visible: []uuid.UUID{ownEnabled.ID, ownDisabled.ID, otherEnabled.ID},
 		},
 		{
-			name: "SiteAuditorSeesAllConfigs",
+			name: "SiteAuditor",
 			client: func(t *testing.T, _ context.Context) *codersdk.ExperimentalClient {
 				rawClient, _ := coderdtest.CreateAnotherUser(t, client.Client, defaultOrg.ID, rbac.RoleAuditor())
 				return codersdk.NewExperimentalClient(rawClient)
 			},
-			visible: []uuid.UUID{ownEnabled.ID, ownDisabled.ID, otherEnabled.ID},
 		},
 		{
-			name: "CustomSiteReadRoleSeesAllConfigs",
+			name: "CustomSiteReadRole",
 			client: func(t *testing.T, ctx context.Context) *codersdk.ExperimentalClient {
 				return newSiteCustomRoleClient(ctx, t, client, rawDB, defaultOrg.ID, database.CustomRolePermission{
 					ResourceType: rbac.ResourceChatModelConfig.Type,
 					Action:       policy.ActionRead,
 				})
 			},
-			visible: []uuid.UUID{ownEnabled.ID, ownDisabled.ID, otherEnabled.ID},
 		},
 		{
-			name: "DeploymentConfigReadOnlyKeepsEnabledList",
-			client: func(t *testing.T, ctx context.Context) *codersdk.ExperimentalClient {
-				return newSiteCustomRoleClient(ctx, t, client, rawDB, defaultOrg.ID, database.CustomRolePermission{
-					ResourceType: rbac.ResourceDeploymentConfig.Type,
-					Action:       policy.ActionRead,
-				})
-			},
-			visible: []uuid.UUID{ownEnabled.ID, otherEnabled.ID},
-			hidden:  []uuid.UUID{ownDisabled.ID},
-		},
-		{
-			name: "DefaultOrgAdminKeepsEnabledList",
+			name: "OrgAdmin",
 			client: func(t *testing.T, _ context.Context) *codersdk.ExperimentalClient {
 				rawClient, _ := coderdtest.CreateAnotherUser(t, client.Client, defaultOrg.ID, rbac.ScopedRoleOrgAdmin(defaultOrg.ID))
 				return codersdk.NewExperimentalClient(rawClient)
 			},
-			visible: []uuid.UUID{ownEnabled.ID, otherEnabled.ID},
-			hidden:  []uuid.UUID{ownDisabled.ID},
 		},
 		{
-			name: "DefaultOrgAuditorKeepsEnabledList",
+			name: "OrgAuditor",
 			client: func(t *testing.T, _ context.Context) *codersdk.ExperimentalClient {
 				rawClient, _ := coderdtest.CreateAnotherUser(t, client.Client, defaultOrg.ID, rbac.ScopedRoleOrgAuditor(defaultOrg.ID))
 				return codersdk.NewExperimentalClient(rawClient)
 			},
-			visible: []uuid.UUID{ownEnabled.ID, otherEnabled.ID},
-			hidden:  []uuid.UUID{ownDisabled.ID},
-		},
-		{
-			name: "NonDefaultOrgAdminKeepsEnabledList",
-			client: func(t *testing.T, _ context.Context) *codersdk.ExperimentalClient {
-				rawClient, _ := coderdtest.CreateAnotherUser(t, client.Client, otherOrg.ID, rbac.ScopedRoleOrgAdmin(otherOrg.ID))
-				return codersdk.NewExperimentalClient(rawClient)
-			},
-			visible: []uuid.UUID{ownEnabled.ID, otherEnabled.ID},
-			hidden:  []uuid.UUID{ownDisabled.ID},
-		},
-		{
-			name: "NonDefaultOrgAuditorKeepsEnabledList",
-			client: func(t *testing.T, _ context.Context) *codersdk.ExperimentalClient {
-				rawClient, _ := coderdtest.CreateAnotherUser(t, client.Client, otherOrg.ID, rbac.ScopedRoleOrgAuditor(otherOrg.ID))
-				return codersdk.NewExperimentalClient(rawClient)
-			},
-			visible: []uuid.UUID{ownEnabled.ID, otherEnabled.ID},
-			hidden:  []uuid.UUID{ownDisabled.ID},
 		},
 	}
 
@@ -146,14 +107,11 @@ func TestChatModelConfigListReadContracts(t *testing.T) {
 			t.Parallel()
 
 			ctx := testutil.Context(t, testutil.WaitLong)
-			configs, err := testCase.client(t, ctx).ListChatModelConfigs(ctx)
+			configs, err := testCase.client(t, ctx).ChatModels(ctx, defaultOrg.ID)
 			require.NoError(t, err)
-			for _, id := range testCase.visible {
-				require.True(t, containsChatModelConfig(configs, id), "must see config %s", id)
-			}
-			for _, id := range testCase.hidden {
-				require.False(t, containsChatModelConfig(configs, id), "must not see config %s", id)
-			}
+			require.True(t, containsChatModelConfig(configs.Models, ownEnabled.ID), "must see enabled config in the requested org")
+			require.True(t, containsChatModelConfig(configs.Models, ownDisabled.ID), "must see disabled config in the requested org")
+			require.False(t, containsChatModelConfig(configs.Models, otherEnabled.ID), "must not see config from another org")
 		})
 	}
 }

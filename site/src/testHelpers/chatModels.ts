@@ -6,6 +6,7 @@ import type {
 import { MOCK_TIMESTAMP } from "./chatEntities";
 
 export const MockChatModelConfig: ChatModel = {
+	organization_id: "00000000-0000-0000-0000-000000000000",
 	id: "model-1",
 	ai_provider_id: "provider-1",
 	model: "gpt-5",

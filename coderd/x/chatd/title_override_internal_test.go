@@ -280,15 +280,21 @@ func TestMaybeGenerateChatTitle_TitleGenerationOverrideSetUnusableSkips(t *testi
 	logger := slogtest.Make(t, &slogtest.Options{IgnoreErrors: true})
 	chat, messages := titleOverrideTestChatAndMessages(t)
 	overrideConfig := titleOverrideModelConfig("gpt-4.1", false)
+	wantTitle := "Fallback title"
 	fallbackModel := &chattest.FakeModel{
 		GenerateObjectFn: func(context.Context, fantasy.ObjectCall) (*fantasy.ObjectResponse, error) {
-			t.Fatal("fallback model should not be called when override is unusable")
-			return nil, xerrors.New("unexpected fallback model call")
+			return &fantasy.ObjectResponse{
+				Object: map[string]any{"title": wantTitle},
+			}, nil
 		},
 	}
 
 	db.EXPECT().GetChatTitleGenerationModelOverride(gomock.Any()).Return(overrideConfig.ID.String(), nil)
 	db.EXPECT().GetChatModelConfigByID(gomock.Any(), overrideConfig.ID).Return(overrideConfig, nil)
+	db.EXPECT().UpdateChatTitleByID(gomock.Any(), database.UpdateChatTitleByIDParams{
+		ID:    chat.ID,
+		Title: wantTitle,
+	}).Return(chatWithTitle(chat, wantTitle), nil)
 
 	generated := &generatedChatTitle{}
 	server := titleOverrideTestServer(db, logger)
@@ -307,8 +313,9 @@ func TestMaybeGenerateChatTitle_TitleGenerationOverrideSetUnusableSkips(t *testi
 		nil,
 	)
 
-	_, ok := generated.Load()
-	require.False(t, ok)
+	gotTitle, ok := generated.Load()
+	require.True(t, ok)
+	require.Equal(t, wantTitle, gotTitle)
 }
 
 func TestMaybeGenerateChatTitle_TitleGenerationOverrideCallFailureSkipsFallback(t *testing.T) {
@@ -582,6 +589,11 @@ func TestResolveManualTitleModel_TitleGenerationOverrideMissingCredentials(t *te
 	db.EXPECT().GetChatModelConfigByID(gomock.Any(), overrideConfig.ID).Return(overrideConfig, nil)
 	db.EXPECT().GetAIProviderByID(gomock.Any(), providerID).Return(provider, nil).AnyTimes()
 	db.EXPECT().GetAIProviderKeysByProviderID(gomock.Any(), providerID).Return(nil, nil).AnyTimes()
+	// Missing override credentials soft-fail the override; manual
+	// selection lists the chat org's configs (none) and falls back to the
+	// chat model, which has no model here to build.
+	db.EXPECT().GetEnabledChatModelConfigsByOrganization(gomock.Any(), chat.OrganizationID).Return(nil, nil)
+	db.EXPECT().GetDefaultChatModelConfig(gomock.Any(), chat.OrganizationID).Return(database.ChatModelConfig{}, sql.ErrNoRows)
 
 	server := titleOverrideTestServer(db, logger)
 	model, gotConfig, err := server.resolveManualTitleModel(
@@ -590,9 +602,9 @@ func TestResolveManualTitleModel_TitleGenerationOverrideMissingCredentials(t *te
 		chat,
 		modelBuildOptions{},
 	)
-	require.Error(t, err)
-	require.ErrorContains(t, err, "resolve manual title generation model override")
-	require.ErrorContains(t, err, "credentials are unavailable")
+	// The chat has no model config and its org has no default: the
+	// fallback resolution errors with ErrNoDefaultChatModelConfig.
+	require.ErrorIs(t, err, ErrNoDefaultChatModelConfig)
 	require.False(t, model.Valid())
 	require.Equal(t, database.ChatModelConfig{}, gotConfig)
 }
@@ -678,6 +690,11 @@ func TestResolveManualTitleModel_TitleGenerationOverrideSetUnusable(t *testing.T
 
 	db.EXPECT().GetChatTitleGenerationModelOverride(gomock.Any()).Return(overrideConfig.ID.String(), nil)
 	db.EXPECT().GetChatModelConfigByID(gomock.Any(), overrideConfig.ID).Return(overrideConfig, nil)
+	// A disabled override config soft-fails the override; manual
+	// selection lists the chat org's configs (none) and falls back to the
+	// chat model, which has no model here to build.
+	db.EXPECT().GetEnabledChatModelConfigsByOrganization(gomock.Any(), chat.OrganizationID).Return(nil, nil)
+	db.EXPECT().GetDefaultChatModelConfig(gomock.Any(), chat.OrganizationID).Return(database.ChatModelConfig{}, sql.ErrNoRows)
 
 	server := titleOverrideTestServer(db, logger)
 	model, gotConfig, err := server.resolveManualTitleModel(
@@ -686,9 +703,9 @@ func TestResolveManualTitleModel_TitleGenerationOverrideSetUnusable(t *testing.T
 		chat,
 		modelBuildOptions{},
 	)
-	require.Error(t, err)
-	require.ErrorContains(t, err, "resolve manual title generation model override")
-	require.ErrorContains(t, err, "title generation model override is unavailable")
+	// The chat has no model config and its org has no default: the
+	// fallback resolution errors with ErrNoDefaultChatModelConfig.
+	require.ErrorIs(t, err, ErrNoDefaultChatModelConfig)
 	require.False(t, model.Valid())
 	require.Equal(t, database.ChatModelConfig{}, gotConfig)
 }
