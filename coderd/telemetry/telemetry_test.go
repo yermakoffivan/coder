@@ -1935,6 +1935,7 @@ func TestChatsTelemetry(t *testing.T) {
 
 	cfg1, ok := configMap[modelCfg.ID]
 	require.True(t, ok)
+	assert.Equal(t, org.ID, cfg1.OrganizationID)
 	assert.Equal(t, "anthropic", cfg1.Provider)
 	assert.Equal(t, "claude-sonnet-4-20250514", cfg1.Model)
 	assert.Equal(t, int64(200000), cfg1.ContextLimit)
@@ -1943,6 +1944,7 @@ func TestChatsTelemetry(t *testing.T) {
 
 	cfg2, ok := configMap[modelCfg2.ID]
 	require.True(t, ok)
+	assert.Equal(t, org.ID, cfg2.OrganizationID)
 	assert.Equal(t, "openai", cfg2.Provider)
 	assert.Equal(t, "gpt-4o", cfg2.Model)
 	assert.Equal(t, int64(128000), cfg2.ContextLimit)
