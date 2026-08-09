@@ -6439,10 +6439,13 @@ func (*API) deleteUserChatProviderKey(rw http.ResponseWriter, r *http.Request) {
 func (api *API) listChatModelConfigs(rw http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	// Admin users can see all model configs (including disabled ones)
-	// for management purposes. Non-admin users see only enabled
-	// configs, which is sufficient for using the chat feature.
-	isAdmin := api.Authorize(r, policy.ActionRead, rbac.ResourceDeploymentConfig)
+	// Users authorized to read chat model configs in any org see the configs
+	// their authorization filter admits (including disabled ones) for
+	// management purposes. Other users see only enabled configs, which is
+	// sufficient for using the chat feature. AnyOrganization routes
+	// org-scoped readers (org admin, org auditor) to the authorized list as
+	// well as site readers; the SQL filter then restricts them to their orgs.
+	isAdmin := api.Authorize(r, policy.ActionRead, rbac.ResourceChatModelConfig.AnyOrganization())
 
 	var configs []database.ChatModelConfig
 	var err error
@@ -6521,6 +6524,11 @@ func (api *API) inChatModelConfigWriteTx(
 func (api *API) createChatModelConfig(rw http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	apiKey := httpmw.APIKey(r)
+	// Interim write gate: pins write access to the pre-RBAC-resource set
+	// (deployment admins) while configs still serve every org through the
+	// default-org fallback. Without it the dbauthz create-in-org check
+	// would let default-org org admins manage configs used by all orgs.
+	// TODO(mafredri): remove after CODAGT-709 M3 (org-scoping cutover)
 	if !api.Authorize(r, policy.ActionUpdate, rbac.ResourceDeploymentConfig) {
 		httpapi.Forbidden(rw)
 		return
@@ -6736,6 +6744,8 @@ func (api *API) createChatModelConfig(rw http.ResponseWriter, r *http.Request) {
 func (api *API) updateChatModelConfig(rw http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	apiKey := httpmw.APIKey(r)
+	// Interim write gate: see createChatModelConfig.
+	// TODO(mafredri): remove after CODAGT-709 M3 (org-scoping cutover)
 	if !api.Authorize(r, policy.ActionUpdate, rbac.ResourceDeploymentConfig) {
 		httpapi.Forbidden(rw)
 		return
@@ -6958,6 +6968,8 @@ func (api *API) updateChatModelConfig(rw http.ResponseWriter, r *http.Request) {
 
 func (api *API) deleteChatModelConfig(rw http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	// Interim write gate: see createChatModelConfig.
+	// TODO(mafredri): remove after CODAGT-709 M3 (org-scoping cutover)
 	if !api.Authorize(r, policy.ActionUpdate, rbac.ResourceDeploymentConfig) {
 		httpapi.Forbidden(rw)
 		return
@@ -7029,9 +7041,9 @@ func ensureDefaultChatModelConfig(
 		return xerrors.Errorf("get default model config: %w", err)
 	}
 
-	modelConfigs, err := tx.GetChatModelConfigs(ctx)
+	modelConfigs, err := tx.GetDefaultChatModelConfigCandidates(ctx)
 	if err != nil {
-		return xerrors.Errorf("list chat model configs: %w", err)
+		return xerrors.Errorf("list default chat model config candidates: %w", err)
 	}
 	orgModelConfigs := make([]database.ChatModelConfig, 0, len(modelConfigs))
 	for _, config := range modelConfigs {
