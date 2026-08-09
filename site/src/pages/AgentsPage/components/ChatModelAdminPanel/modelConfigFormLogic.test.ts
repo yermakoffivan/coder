@@ -81,7 +81,7 @@ function deepGet(obj: unknown, path: string[]): unknown {
 	return current;
 }
 
-const baseChatModelConfig: TypesGen.ChatModelConfig = {
+const baseChatModelConfig: TypesGen.ChatModel = {
 	...MockChatModelConfig,
 	id: "test-id",
 	model: "gpt-4",
@@ -216,7 +216,7 @@ describe("extractModelConfigFormState", () => {
 	});
 
 	it("extracts top-level numeric fields", () => {
-		const model: TypesGen.ChatModelConfig = {
+		const model: TypesGen.ChatModel = {
 			...baseChatModelConfig,
 			model_config: {
 				max_output_tokens: 4096,
@@ -237,7 +237,7 @@ describe("extractModelConfigFormState", () => {
 	});
 
 	it("extracts reasoning effort bounds", () => {
-		const model: TypesGen.ChatModelConfig = {
+		const model: TypesGen.ChatModel = {
 			...baseChatModelConfig,
 			model_config: {
 				reasoning_effort: {
@@ -252,7 +252,7 @@ describe("extractModelConfigFormState", () => {
 	});
 
 	it("extracts OpenAI provider options", () => {
-		const model: TypesGen.ChatModelConfig = {
+		const model: TypesGen.ChatModel = {
 			...baseChatModelConfig,
 			model_config: {
 				provider_options: {
@@ -278,7 +278,7 @@ describe("extractModelConfigFormState", () => {
 	});
 
 	it("extracts Anthropic provider options with thinking", () => {
-		const model: TypesGen.ChatModelConfig = {
+		const model: TypesGen.ChatModel = {
 			...baseChatModelConfig,
 			model_config: {
 				provider_options: {
@@ -298,7 +298,7 @@ describe("extractModelConfigFormState", () => {
 	});
 
 	it("extracts Anthropic 1M context window option", () => {
-		const model: TypesGen.ChatModelConfig = {
+		const model: TypesGen.ChatModel = {
 			...baseChatModelConfig,
 			model_config: {
 				provider_options: {
@@ -315,7 +315,7 @@ describe("extractModelConfigFormState", () => {
 
 	it("extracts Google provider options with safety settings", () => {
 		const safetySettings = [{ category: "harm", threshold: "block" }];
-		const model: TypesGen.ChatModelConfig = {
+		const model: TypesGen.ChatModel = {
 			...baseChatModelConfig,
 			model_config: {
 				provider_options: {
@@ -339,7 +339,7 @@ describe("extractModelConfigFormState", () => {
 	});
 
 	it("returns empty string for google safety settings when absent", () => {
-		const model: TypesGen.ChatModelConfig = {
+		const model: TypesGen.ChatModel = {
 			...baseChatModelConfig,
 			model_config: {
 				provider_options: {
@@ -353,7 +353,7 @@ describe("extractModelConfigFormState", () => {
 	});
 
 	it("extracts OpenAI-compatible provider options", () => {
-		const model: TypesGen.ChatModelConfig = {
+		const model: TypesGen.ChatModel = {
 			...baseChatModelConfig,
 			model_config: {
 				provider_options: {
@@ -369,7 +369,7 @@ describe("extractModelConfigFormState", () => {
 	});
 
 	it("extracts OpenRouter provider options", () => {
-		const model: TypesGen.ChatModelConfig = {
+		const model: TypesGen.ChatModel = {
 			...baseChatModelConfig,
 			model_config: {
 				provider_options: {
@@ -397,7 +397,7 @@ describe("extractModelConfigFormState", () => {
 	});
 
 	it("extracts Vercel provider options", () => {
-		const model: TypesGen.ChatModelConfig = {
+		const model: TypesGen.ChatModel = {
 			...baseChatModelConfig,
 			model_config: {
 				provider_options: {
@@ -423,7 +423,7 @@ describe("extractModelConfigFormState", () => {
 	});
 
 	it("handles missing provider_options gracefully", () => {
-		const model: TypesGen.ChatModelConfig = {
+		const model: TypesGen.ChatModel = {
 			...baseChatModelConfig,
 			model_config: {
 				temperature: 0.5,

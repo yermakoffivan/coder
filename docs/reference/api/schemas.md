@@ -3289,68 +3289,7 @@ AuthorizationObject can represent a "set" of objects, such as: all workspaces in
 | `messages`        | array of [codersdk.ChatMessage](#codersdkchatmessage)             | false    |              |             |
 | `queued_messages` | array of [codersdk.ChatQueuedMessage](#codersdkchatqueuedmessage) | false    |              |             |
 
-## codersdk.ChatModel
-
-```json
-{
-  "display_name": "string",
-  "id": "string",
-  "model": "string",
-  "provider": "string"
-}
-```
-
-### Properties
-
-| Name           | Type   | Required | Restrictions | Description |
-|----------------|--------|----------|--------------|-------------|
-| `display_name` | string | false    |              |             |
-| `id`           | string | false    |              |             |
-| `model`        | string | false    |              |             |
-| `provider`     | string | false    |              |             |
-
-## codersdk.ChatModelProvider
-
-```json
-{
-  "available": true,
-  "models": [
-    {
-      "display_name": "string",
-      "id": "string",
-      "model": "string",
-      "provider": "string"
-    }
-  ],
-  "provider": "string",
-  "unavailable_reason": "missing_api_key"
-}
-```
-
-### Properties
-
-| Name                 | Type                                                                                       | Required | Restrictions | Description |
-|----------------------|--------------------------------------------------------------------------------------------|----------|--------------|-------------|
-| `available`          | boolean                                                                                    | false    |              |             |
-| `models`             | array of [codersdk.ChatModel](#codersdkchatmodel)                                          | false    |              |             |
-| `provider`           | string                                                                                     | false    |              |             |
-| `unavailable_reason` | [codersdk.ChatModelProviderUnavailableReason](#codersdkchatmodelproviderunavailablereason) | false    |              |             |
-
-## codersdk.ChatModelProviderUnavailableReason
-
-```json
-"missing_api_key"
-```
-
-### Properties
-
-#### Enumerated Values
-
-| Value(s)                                                   |
-|------------------------------------------------------------|
-| `fetch_failed`, `missing_api_key`, `user_api_key_required` |
-
-## codersdk.ChatModelsResponse
+## codersdk.ChatModelAvailabilityResponse
 
 ```json
 {
@@ -3384,6 +3323,47 @@ AuthorizationObject can represent a "set" of objects, such as: all workspaces in
 |-------------------------|-------------------------------------------------------------------------------|----------|--------------|------------------------------------------------------------------------------------------------------------------------|
 | `providers`             | array of [codersdk.ChatModelProvider](#codersdkchatmodelprovider)             | false    |              |                                                                                                                        |
 | `unsupported_providers` | array of [codersdk.ChatUnsupportedProvider](#codersdkchatunsupportedprovider) | false    |              | Unsupported providers lists configured providers the Agents harness cannot use, so the UI can explain the empty state. |
+
+## codersdk.ChatModelProvider
+
+```json
+{
+  "available": true,
+  "models": [
+    {
+      "display_name": "string",
+      "id": "string",
+      "model": "string",
+      "provider": "string"
+    }
+  ],
+  "provider": "string",
+  "unavailable_reason": "missing_api_key"
+}
+```
+
+### Properties
+
+| Name                 | Type                                                                                       | Required | Restrictions | Description |
+|----------------------|--------------------------------------------------------------------------------------------|----------|--------------|-------------|
+| `available`          | boolean                                                                                    | false    |              |             |
+| `models`             | array of [codersdk.MinimalChatModel](#codersdkminimalchatmodel)                            | false    |              |             |
+| `provider`           | string                                                                                     | false    |              |             |
+| `unavailable_reason` | [codersdk.ChatModelProviderUnavailableReason](#codersdkchatmodelproviderunavailablereason) | false    |              |             |
+
+## codersdk.ChatModelProviderUnavailableReason
+
+```json
+"missing_api_key"
+```
+
+### Properties
+
+#### Enumerated Values
+
+| Value(s)                                                   |
+|------------------------------------------------------------|
+| `fetch_failed`, `missing_api_key`, `user_api_key_required` |
 
 ## codersdk.ChatPlanMode
 
@@ -8620,6 +8600,26 @@ Only certain features set these fields: - FeatureManagedAgentLimit - FeatureAgen
 | `available`          | integer | false    |              | Available is the number of provisioner daemons that are available to take jobs. This may be less than the count if some provisioners are busy or have been stopped. |
 | `count`              | integer | false    |              | Count is the number of provisioner daemons that matched the given tags. If the count is 0, it means no provisioner daemons matched the requested tags.              |
 | `most_recently_seen` | string  | false    |              | Most recently seen is the most recently seen time of the set of matched provisioners. If no provisioners matched, this field will be null.                          |
+
+## codersdk.MinimalChatModel
+
+```json
+{
+  "display_name": "string",
+  "id": "string",
+  "model": "string",
+  "provider": "string"
+}
+```
+
+### Properties
+
+| Name           | Type   | Required | Restrictions | Description |
+|----------------|--------|----------|--------------|-------------|
+| `display_name` | string | false    |              |             |
+| `id`           | string | false    |              |             |
+| `model`        | string | false    |              |             |
+| `provider`     | string | false    |              |             |
 
 ## codersdk.MinimalOrganization
 

@@ -115,7 +115,7 @@ func ensureScaletestChatModelConfig(ctx context.Context, client chatModelConfigC
 	enabled := true
 	isDefault := false
 	contextLimit := scaletestModelContextLimit
-	created, err := client.CreateChatModelConfig(ctx, codersdk.CreateChatModelConfigRequest{
+	created, err := client.CreateChatModelConfig(ctx, codersdk.CreateChatModelRequest{
 		AIProviderID: &provider.ID,
 		Model:        scaletestModelName,
 		DisplayName:  scaletestModelDisplayName,

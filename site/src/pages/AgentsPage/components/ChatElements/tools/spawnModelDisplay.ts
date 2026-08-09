@@ -34,7 +34,7 @@ export const resolveSpawnModelDisplay = ({
 	modelConfigId,
 	reasoningEffort,
 }: {
-	configs: readonly TypesGen.ChatModelConfig[] | undefined;
+	configs: readonly TypesGen.ChatModel[] | undefined;
 	modelConfigId?: string;
 	reasoningEffort?: string;
 }): SpawnModelDisplay => {

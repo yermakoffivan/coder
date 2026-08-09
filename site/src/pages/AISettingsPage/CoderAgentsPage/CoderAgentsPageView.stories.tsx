@@ -15,8 +15,8 @@ const TITLE_UNAVAILABLE_SAVED_MODEL_WARNING =
 	"The selected model is currently unavailable. Title generation will be skipped until you choose another model or clear this setting.";
 
 const buildModelConfig = (
-	overrides: Partial<TypesGen.ChatModelConfig>,
-): TypesGen.ChatModelConfig => ({
+	overrides: Partial<TypesGen.ChatModel>,
+): TypesGen.ChatModel => ({
 	...MockChatModelConfig,
 	id: "model-default",
 	model: "gpt-4.1-mini",
@@ -121,7 +121,7 @@ const providerDisabledModelConfig = buildModelConfig({
 	context_limit: 128_000,
 });
 
-const allModelConfigs: TypesGen.ChatModelConfig[] = [
+const allModelConfigs: TypesGen.ChatModel[] = [
 	generalModelConfig,
 	claudeSonnetModelConfig,
 	advisorReasoningModelConfig,

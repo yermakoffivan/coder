@@ -56,7 +56,7 @@ import { ChatTopBar } from "./components/ChatTopBar";
 
 const defaultModelConfigID = "model-config-1";
 
-const defaultModelConfigs: TypesGen.ChatModelConfig[] = [
+const defaultModelConfigs: TypesGen.ChatModel[] = [
 	{
 		id: defaultModelConfigID,
 		ai_provider_id: "provider-openai",

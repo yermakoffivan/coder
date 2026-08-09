@@ -3464,8 +3464,8 @@ class ExperimentalApiMethods {
 		return response.data;
 	};
 
-	getChatModels = async (): Promise<TypesGen.ChatModelsResponse> => {
-		const response = await this.axios.get<TypesGen.ChatModelsResponse>(
+	getChatModels = async (): Promise<TypesGen.ChatModelAvailabilityResponse> => {
+		const response = await this.axios.get<TypesGen.ChatModelAvailabilityResponse>(
 			"/api/experimental/chats/models",
 		);
 		return response.data;
@@ -3855,16 +3855,16 @@ class ExperimentalApiMethods {
 		);
 	};
 
-	getChatModelConfigs = async (): Promise<TypesGen.ChatModelConfig[]> => {
+	getChatModelConfigs = async (): Promise<TypesGen.ChatModel[]> => {
 		const response =
-			await this.axios.get<TypesGen.ChatModelConfig[]>(chatModelConfigsPath);
+			await this.axios.get<TypesGen.ChatModel[]>(chatModelConfigsPath);
 		return response.data;
 	};
 
 	createChatModelConfig = async (
-		req: TypesGen.CreateChatModelConfigRequest,
-	): Promise<TypesGen.ChatModelConfig> => {
-		const response = await this.axios.post<TypesGen.ChatModelConfig>(
+		req: TypesGen.CreateChatModelRequest,
+	): Promise<TypesGen.ChatModel> => {
+		const response = await this.axios.post<TypesGen.ChatModel>(
 			chatModelConfigsPath,
 			req,
 		);
@@ -3873,9 +3873,9 @@ class ExperimentalApiMethods {
 
 	updateChatModelConfig = async (
 		modelConfigId: string,
-		req: TypesGen.UpdateChatModelConfigRequest,
-	): Promise<TypesGen.ChatModelConfig> => {
-		const response = await this.axios.patch<TypesGen.ChatModelConfig>(
+		req: TypesGen.UpdateChatModelRequest,
+	): Promise<TypesGen.ChatModel> => {
+		const response = await this.axios.patch<TypesGen.ChatModel>(
 			`${chatModelConfigsPath}/${encodeURIComponent(modelConfigId)}`,
 			req,
 		);

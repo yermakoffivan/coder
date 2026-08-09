@@ -29,7 +29,7 @@ interface SubagentModelOverrideSettingsProps {
 	title: string;
 	description?: ReactNode;
 	modelOverrideData: ModelOverrideData | undefined;
-	enabledModelConfigs: readonly TypesGen.ChatModelConfig[];
+	enabledModelConfigs: readonly TypesGen.ChatModel[];
 	providerInfoByID: ReadonlyMap<string, ProviderInfo>;
 	modelConfigsError: unknown;
 	isLoading: boolean;

@@ -122,7 +122,7 @@ const mockWorkspace: TypesGen.Workspace = {
 	},
 };
 
-const mockModelCatalog: TypesGen.ChatModelsResponse = {
+const mockModelCatalog: TypesGen.ChatModelAvailabilityResponse = {
 	providers: [
 		{
 			provider: "openai",
@@ -140,7 +140,7 @@ const mockModelCatalog: TypesGen.ChatModelsResponse = {
 	unsupported_providers: [],
 };
 
-const mockModelConfigs: TypesGen.ChatModelConfig[] = [
+const mockModelConfigs: TypesGen.ChatModel[] = [
 	{
 		...MockChatModelConfig,
 		id: MODEL_CONFIG_ID,

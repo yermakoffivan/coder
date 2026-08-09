@@ -14,7 +14,7 @@ import {
 import type { ModelFormValues } from "#/pages/AgentsPage/components/ChatModelAdminPanel/modelConfigFormLogic";
 
 export const ModelFormDialogs: FC<{
-	editingModel?: TypesGen.ChatModelConfig;
+	editingModel?: TypesGen.ChatModel;
 	onDeleteModel?: (modelConfigId: string) => Promise<void>;
 	isDeleting: boolean;
 	confirmingDelete: boolean;
@@ -28,7 +28,7 @@ export const ModelFormDialogs: FC<{
 	};
 	confirmingReplaceDefault: boolean;
 	setConfirmingReplaceDefault: (open: boolean) => void;
-	currentDefaultModel?: TypesGen.ChatModelConfig;
+	currentDefaultModel?: TypesGen.ChatModel;
 	onConfirmReplaceDefault: () => void;
 }> = ({
 	editingModel,

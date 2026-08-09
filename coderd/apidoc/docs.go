@@ -310,7 +310,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/codersdk.ChatModelsResponse"
+                            "$ref": "#/definitions/codersdk.ChatModelAvailabilityResponse"
                         }
                     }
                 },
@@ -18205,20 +18205,21 @@ const docTemplate = `{
                 }
             }
         },
-        "codersdk.ChatModel": {
+        "codersdk.ChatModelAvailabilityResponse": {
             "type": "object",
             "properties": {
-                "display_name": {
-                    "type": "string"
+                "providers": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/codersdk.ChatModelProvider"
+                    }
                 },
-                "id": {
-                    "type": "string"
-                },
-                "model": {
-                    "type": "string"
-                },
-                "provider": {
-                    "type": "string"
+                "unsupported_providers": {
+                    "description": "UnsupportedProviders lists configured providers the Agents harness\ncannot use, so the UI can explain the empty state.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/codersdk.ChatUnsupportedProvider"
+                    }
                 }
             }
         },
@@ -18231,7 +18232,7 @@ const docTemplate = `{
                 "models": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/codersdk.ChatModel"
+                        "$ref": "#/definitions/codersdk.MinimalChatModel"
                     }
                 },
                 "provider": {
@@ -18254,24 +18255,6 @@ const docTemplate = `{
                 "ChatModelProviderUnavailableFetchFailed",
                 "ChatModelProviderUnavailableReasonUserAPIKeyRequired"
             ]
-        },
-        "codersdk.ChatModelsResponse": {
-            "type": "object",
-            "properties": {
-                "providers": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/codersdk.ChatModelProvider"
-                    }
-                },
-                "unsupported_providers": {
-                    "description": "UnsupportedProviders lists configured providers the Agents harness\ncannot use, so the UI can explain the empty state.",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/codersdk.ChatUnsupportedProvider"
-                    }
-                }
-            }
         },
         "codersdk.ChatPlanMode": {
             "type": "string",
@@ -21404,6 +21387,23 @@ const docTemplate = `{
                     "description": "MostRecentlySeen is the most recently seen time of the set of matched\nprovisioners. If no provisioners matched, this field will be null.",
                     "type": "string",
                     "format": "date-time"
+                }
+            }
+        },
+        "codersdk.MinimalChatModel": {
+            "type": "object",
+            "properties": {
+                "display_name": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "model": {
+                    "type": "string"
+                },
+                "provider": {
+                    "type": "string"
                 }
             }
         },

@@ -2,7 +2,7 @@ import { type FC, useState } from "react";
 import { useQuery } from "react-query";
 import { useLocation, useParams } from "react-router";
 import { userChatProviderConfigs } from "#/api/queries/chats";
-import type { Chat, ChatModelConfig } from "#/api/typesGenerated";
+import type { Chat, ChatModel } from "#/api/typesGenerated";
 import type { AgentSidebarFilters } from "../../utils/agentSidebarFilters";
 import type { ModelSelectorOption } from "../ChatElements";
 import { ChatsPanel } from "./chats/ChatsPanel";
@@ -16,7 +16,7 @@ interface ChatsSidebarProps {
 	chats: readonly Chat[];
 	chatErrorReasons: Record<string, string>;
 	modelOptions: readonly ModelSelectorOption[];
-	modelConfigs: readonly ChatModelConfig[];
+	modelConfigs: readonly ChatModel[];
 	onArchiveAgent: (chatId: string) => void;
 	onUnarchiveAgent: (chatId: string) => void;
 	onArchiveAndDeleteWorkspace: (chatId: string, workspaceId: string) => void;

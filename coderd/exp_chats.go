@@ -1535,7 +1535,7 @@ func (api *API) postChats(rw http.ResponseWriter, r *http.Request) {
 // @Security CoderSessionToken
 // @Tags Chats
 // @Produce json
-// @Success 200 {object} codersdk.ChatModelsResponse
+// @Success 200 {object} codersdk.ChatModelAvailabilityResponse
 // @Router /api/experimental/chats/models [get]
 // @Description Experimental: this endpoint is subject to change.
 func (api *API) listChatModels(rw http.ResponseWriter, r *http.Request) {
@@ -1550,7 +1550,7 @@ func (api *API) listChatModels(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 	catalog := chatprovider.NewModelCatalog()
-	var response codersdk.ChatModelsResponse
+	var response codersdk.ChatModelAvailabilityResponse
 	if configured, ok := catalog.ListConfiguredModels(
 		availability.configuredProviders,
 		availability.configuredModels,
@@ -6469,7 +6469,7 @@ func (api *API) listChatModelConfigs(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp := make([]codersdk.ChatModelConfig, 0, len(configs))
+	resp := make([]codersdk.ChatModel, 0, len(configs))
 	for _, config := range configs {
 		resp = append(resp, convertChatModelConfig(config))
 	}
@@ -6534,7 +6534,7 @@ func (api *API) createChatModelConfig(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req codersdk.CreateChatModelConfigRequest
+	var req codersdk.CreateChatModelRequest
 	if !httpapi.Read(ctx, rw, r, &req) {
 		return
 	}
@@ -6769,7 +6769,7 @@ func (api *API) updateChatModelConfig(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req codersdk.UpdateChatModelConfigRequest
+	var req codersdk.UpdateChatModelRequest
 	if !httpapi.Read(ctx, rw, r, &req) {
 		return
 	}
@@ -7143,7 +7143,7 @@ func parseChatModelConfigID(rw http.ResponseWriter, r *http.Request) (uuid.UUID,
 	return modelConfigID, true
 }
 
-func convertChatModelConfig(config database.ChatModelConfig) codersdk.ChatModelConfig {
+func convertChatModelConfig(config database.ChatModelConfig) codersdk.ChatModel {
 	modelConfig := unmarshalChatModelCallConfig(config.Options)
 	var reasoningEffortConfig *codersdk.ChatModelReasoningEffortConfig
 	if modelConfig != nil {
@@ -7152,7 +7152,7 @@ func convertChatModelConfig(config database.ChatModelConfig) codersdk.ChatModelC
 
 	// Active configs always carry a non-null ai_provider_id (CHECK
 	// chat_model_configs_ai_provider_required_when_active).
-	return codersdk.ChatModelConfig{
+	return codersdk.ChatModel{
 		ID:                   config.ID,
 		AIProviderID:         config.AIProviderID.UUID,
 		Model:                config.Model,

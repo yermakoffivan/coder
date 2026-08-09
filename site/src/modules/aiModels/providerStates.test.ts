@@ -36,7 +36,7 @@ describe("deriveProviderStates", () => {
 				display_name: "OpenAI",
 			},
 		];
-		const catalog: TypesGen.ChatModelsResponse = {
+		const catalog: TypesGen.ChatModelAvailabilityResponse = {
 			providers: [
 				{ ...MockChatModelProvider, provider: "google" },
 				{ ...MockChatModelProvider, provider: "anthropic" },
@@ -112,7 +112,7 @@ describe("deriveProviderStates", () => {
 	});
 
 	it("detects env-preset providers from the catalog when no config exists", () => {
-		const catalog: TypesGen.ChatModelsResponse = {
+		const catalog: TypesGen.ChatModelAvailabilityResponse = {
 			providers: [
 				{ ...MockChatModelProvider, provider: "openai", available: true },
 			],
@@ -144,7 +144,7 @@ describe("deriveProviderStates", () => {
 	});
 
 	it("treats an unavailable catalog provider as having a key unless the api key is missing", () => {
-		const catalog: TypesGen.ChatModelsResponse = {
+		const catalog: TypesGen.ChatModelAvailabilityResponse = {
 			providers: [
 				{
 					...MockChatModelProvider,
@@ -171,7 +171,7 @@ describe("deriveProviderStates", () => {
 				base_url: "https://custom.example.com/v1",
 			},
 		];
-		const catalog: TypesGen.ChatModelsResponse = {
+		const catalog: TypesGen.ChatModelAvailabilityResponse = {
 			providers: [
 				{
 					...MockChatModelProvider,

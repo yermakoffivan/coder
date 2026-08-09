@@ -37,7 +37,7 @@ interface PersonalModelOverrideRowProps {
 	overrideData: PersonalOverride | undefined;
 	deploymentDefault?: TypesGen.ChatModelOverrideResponse;
 	modelOptions: readonly ModelSelectorOption[];
-	modelConfigs: readonly TypesGen.ChatModelConfig[];
+	modelConfigs: readonly TypesGen.ChatModel[];
 	modelConfigsError: unknown;
 	isLoading: boolean;
 	onSave: SavePersonalOverride;
@@ -90,13 +90,13 @@ const toUpdateRequest = (
 	return { mode: values.mode, model_config_id: "" };
 };
 
-const getModelConfigLabel = (modelConfig: TypesGen.ChatModelConfig): string => {
+const getModelConfigLabel = (modelConfig: TypesGen.ChatModel): string => {
 	return modelConfig.display_name.trim() || modelConfig.model || modelConfig.id;
 };
 
 const getModelConfigLabelByID = (
 	modelConfigID: string,
-	modelConfigs: readonly TypesGen.ChatModelConfig[],
+	modelConfigs: readonly TypesGen.ChatModel[],
 ): string | undefined => {
 	const modelConfig = modelConfigs.find(
 		(config) => config.id === modelConfigID,
@@ -106,7 +106,7 @@ const getModelConfigLabelByID = (
 
 const getUnavailableModelLabel = (
 	modelConfigID: string,
-	modelConfigs: readonly TypesGen.ChatModelConfig[],
+	modelConfigs: readonly TypesGen.ChatModel[],
 ): string => {
 	const modelConfigLabel = getModelConfigLabelByID(modelConfigID, modelConfigs);
 	if (!modelConfigLabel) {
@@ -125,7 +125,7 @@ const getDefaultModeOptions = (
 
 const getChatDefaultDescription = (
 	context: PersonalOverrideContext,
-	modelConfigs: readonly TypesGen.ChatModelConfig[],
+	modelConfigs: readonly TypesGen.ChatModel[],
 ): string => {
 	if (context !== "root") {
 		return "Your current chat model";
@@ -138,7 +138,7 @@ const getChatDefaultDescription = (
 
 const getDeploymentDefaultDescription = (
 	deploymentDefault: TypesGen.ChatModelOverrideResponse | undefined,
-	modelConfigs: readonly TypesGen.ChatModelConfig[],
+	modelConfigs: readonly TypesGen.ChatModel[],
 ): string => {
 	if (!deploymentDefault) {
 		return "Loading deployment default";

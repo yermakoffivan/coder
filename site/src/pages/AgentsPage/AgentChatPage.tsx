@@ -800,7 +800,7 @@ const getPersistedDetailError = ({
 function resolveCompactionThreshold(
 	modelConfigID: string | undefined,
 	userThresholds: readonly TypesGen.UserChatCompactionThreshold[] | undefined,
-	modelConfigs: readonly TypesGen.ChatModelConfig[] | null | undefined,
+	modelConfigs: readonly TypesGen.ChatModel[] | null | undefined,
 ): number | undefined {
 	if (!modelConfigID || !Array.isArray(modelConfigs)) return undefined;
 	const config = modelConfigs.find((c) => c.id === modelConfigID);

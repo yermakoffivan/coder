@@ -49,7 +49,7 @@ const defaultModelOptions: ModelSelectorOption[] = [
 	},
 ];
 
-const defaultModelConfigs: TypesGen.ChatModelConfig[] = [
+const defaultModelConfigs: TypesGen.ChatModel[] = [
 	{
 		id: "config-openai-gpt-4o",
 		ai_provider_id: "prov-1",

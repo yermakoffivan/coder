@@ -127,7 +127,7 @@ interface AgentCreateFormProps {
 	isCreating: boolean;
 	createError: unknown;
 	canCreateChat: boolean;
-	modelCatalog: TypesGen.ChatModelsResponse | null | undefined;
+	modelCatalog: TypesGen.ChatModelAvailabilityResponse | null | undefined;
 	modelOptions: readonly ChatModelOption[];
 	canConfigureAgentSetup: boolean;
 	providerCount?: number;
@@ -135,7 +135,7 @@ interface AgentCreateFormProps {
 	unsupportedProviderNames?: readonly string[];
 	aiGatewayDisabled?: boolean;
 	isModelCatalogLoading: boolean;
-	modelConfigs: readonly TypesGen.ChatModelConfig[];
+	modelConfigs: readonly TypesGen.ChatModel[];
 	isModelConfigsLoading: boolean;
 	rootPersonalModelOverride?: TypesGen.ChatPersonalModelOverride;
 	isPersonalModelOverridesLoading?: boolean;

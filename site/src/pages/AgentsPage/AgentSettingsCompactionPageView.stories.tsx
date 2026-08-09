@@ -20,7 +20,7 @@ const baseArgs: AgentSettingsCompactionPageViewProps = {
 			created_at: "2026-03-12T12:00:00.000Z",
 			updated_at: "2026-03-12T12:00:00.000Z",
 		},
-	] as TypesGen.ChatModelConfig[],
+	] as TypesGen.ChatModel[],
 	providerTypeByID: new Map<string, string>([["prov-openai", "openai"]]),
 	modelConfigsError: undefined,
 	isLoadingModelConfigs: false,

@@ -22,7 +22,7 @@ import {
 } from "lucide-react";
 import { type FC, useEffect, useRef, useState } from "react";
 import { Link, type Location, NavLink } from "react-router";
-import type { Chat, ChatModelConfig } from "#/api/typesGenerated";
+import type { Chat, ChatModel } from "#/api/typesGenerated";
 import { ErrorAlert } from "#/components/Alert/ErrorAlert";
 import { Button } from "#/components/Button/Button";
 import { ProductLogo } from "#/components/Icons/ProductLogo";
@@ -68,7 +68,7 @@ interface ChatsPanelProps {
 	readonly chats: readonly Chat[];
 	readonly chatErrorReasons: Record<string, string>;
 	readonly modelOptions: readonly ModelSelectorOption[];
-	readonly modelConfigs: readonly ChatModelConfig[];
+	readonly modelConfigs: readonly ChatModel[];
 	readonly onArchiveAgent: (chatId: string) => void;
 	readonly onUnarchiveAgent: (chatId: string) => void;
 	readonly onArchiveAndDeleteWorkspace: (

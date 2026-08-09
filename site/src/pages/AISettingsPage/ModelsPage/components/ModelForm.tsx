@@ -44,22 +44,22 @@ const validationSchema = Yup.object({
 });
 
 interface ModelFormProps {
-	editingModel?: TypesGen.ChatModelConfig;
-	duplicateSourceModel?: TypesGen.ChatModelConfig;
+	editingModel?: TypesGen.ChatModel;
+	duplicateSourceModel?: TypesGen.ChatModel;
 	providerStates: readonly ProviderState[];
 	selectedProviderState: ProviderState | null;
 	onProviderChange: (providerKey: string) => void;
 	isSaving: boolean;
 	isDeleting: boolean;
 	onCreateModel: (
-		req: TypesGen.CreateChatModelConfigRequest,
+		req: TypesGen.CreateChatModelRequest,
 	) => Promise<unknown>;
 	onUpdateModel: (
 		modelConfigId: string,
-		req: TypesGen.UpdateChatModelConfigRequest,
+		req: TypesGen.UpdateChatModelRequest,
 	) => Promise<unknown>;
 	onDeleteModel?: (modelConfigId: string) => Promise<void>;
-	currentDefaultModel?: TypesGen.ChatModelConfig;
+	currentDefaultModel?: TypesGen.ChatModel;
 	onSetDefault?: () => void;
 	onDuplicate?: () => void;
 	onToggleEnabled?: (enabled: boolean) => void;
@@ -147,7 +147,7 @@ export const ModelForm: FC<ModelFormProps> = ({
 			const editingProviderConfigID = editingModel?.ai_provider_id.trim() ?? "";
 
 			if (isEditing && editingModel) {
-				const req: TypesGen.UpdateChatModelConfigRequest = {
+				const req: TypesGen.UpdateChatModelRequest = {
 					...(selectedProviderConfigID &&
 						selectedProviderConfigID !== editingProviderConfigID && {
 							ai_provider_id: selectedProviderConfigID,
@@ -180,7 +180,7 @@ export const ModelForm: FC<ModelFormProps> = ({
 			} else {
 				if (!selectedProviderState?.providerConfig) return;
 
-				const req: TypesGen.CreateChatModelConfigRequest = {
+				const req: TypesGen.CreateChatModelRequest = {
 					ai_provider_id: selectedProviderState.providerConfig.id,
 					model: trimmedModel,
 					enabled: values.enabled,

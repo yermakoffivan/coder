@@ -1,7 +1,7 @@
 import type { FC, FormEvent } from "react";
 import { useId, useState } from "react";
 import type {
-	ChatModelConfig,
+	ChatModel,
 	UserChatProviderConfig,
 } from "#/api/typesGenerated";
 import { ErrorAlert } from "#/components/Alert/ErrorAlert";
@@ -56,7 +56,7 @@ const getProviderStatus = (
 
 interface ProviderKeyPanelProps {
 	provider: UserChatProviderConfig;
-	models: readonly ChatModelConfig[];
+	models: readonly ChatModel[];
 	isModelsLoading: boolean;
 	areModelsUnavailable: boolean;
 	isSaving: boolean;
@@ -246,7 +246,7 @@ export interface AgentSettingsAPIKeysPageViewProps {
 	error: unknown;
 	isLoading: boolean;
 	providerItems: readonly AgentSettingsAPIKeysProviderItem[];
-	models: readonly ChatModelConfig[];
+	models: readonly ChatModel[];
 	isModelsLoading: boolean;
 	areModelsUnavailable: boolean;
 	onSave: (providerConfigId: string, apiKey: string) => void;

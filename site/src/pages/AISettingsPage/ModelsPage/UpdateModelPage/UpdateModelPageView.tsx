@@ -5,8 +5,8 @@ import { pageTitle } from "#/utils/page";
 import { ModelForm } from "../components/ModelForm";
 
 interface UpdateModelPageViewProps {
-	model: TypesGen.ChatModelConfig;
-	currentDefaultModel?: TypesGen.ChatModelConfig;
+	model: TypesGen.ChatModel;
+	currentDefaultModel?: TypesGen.ChatModel;
 	providerStates: readonly ProviderState[];
 	selectedProviderState: ProviderState | null;
 	onProviderChange: (providerKey: string) => void;
@@ -14,7 +14,7 @@ interface UpdateModelPageViewProps {
 	isDeleting: boolean;
 	onUpdateModel: (
 		modelConfigId: string,
-		req: TypesGen.UpdateChatModelConfigRequest,
+		req: TypesGen.UpdateChatModelRequest,
 	) => Promise<unknown>;
 	onDeleteModel: (modelConfigId: string) => Promise<void>;
 	onDuplicate: () => void;

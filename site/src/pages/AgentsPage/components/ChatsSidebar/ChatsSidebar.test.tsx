@@ -580,7 +580,7 @@ describe("ChatsSidebar model display names", () => {
 				displayName: "GPT-4o (Quality)",
 			},
 		];
-		const modelConfigs: TypesGen.ChatModelConfig[] = [
+		const modelConfigs: TypesGen.ChatModel[] = [
 			{
 				id: "config-fast",
 				ai_provider_id: "prov-openai",

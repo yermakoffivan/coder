@@ -2144,7 +2144,7 @@ export const chatModelsKey = [...chatConfigKey, "models", "catalog"] as const;
 
 export const chatModels = () => ({
 	queryKey: chatModelsKey,
-	queryFn: (): Promise<TypesGen.ChatModelsResponse> =>
+	queryFn: (): Promise<TypesGen.ChatModelAvailabilityResponse> =>
 		API.experimental.getChatModels(),
 });
 
@@ -2156,7 +2156,7 @@ export const chatModelConfigsKey = [
 
 export const chatModelConfigs = () => ({
 	queryKey: chatModelConfigsKey,
-	queryFn: (): Promise<TypesGen.ChatModelConfig[]> =>
+	queryFn: (): Promise<TypesGen.ChatModel[]> =>
 		API.experimental.getChatModelConfigs(),
 });
 
@@ -2232,7 +2232,7 @@ export const invalidateChatProviderDependentQueries = async (
 };
 
 export const createChatModelConfig = (queryClient: QueryClient) => ({
-	mutationFn: (req: TypesGen.CreateChatModelConfigRequest) =>
+	mutationFn: (req: TypesGen.CreateChatModelRequest) =>
 		API.experimental.createChatModelConfig(req),
 	onSuccess: async () => {
 		await invalidateChatConfigurationQueries(queryClient);
@@ -2241,7 +2241,7 @@ export const createChatModelConfig = (queryClient: QueryClient) => ({
 
 type UpdateChatModelConfigMutationArgs = {
 	modelConfigId: string;
-	req: TypesGen.UpdateChatModelConfigRequest;
+	req: TypesGen.UpdateChatModelRequest;
 };
 
 export const updateChatModelConfig = (queryClient: QueryClient) => ({

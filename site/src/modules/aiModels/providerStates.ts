@@ -10,7 +10,7 @@ export type ProviderState = {
 	provider: string;
 	label: string;
 	providerConfig: TypesGen.ChatProviderConfig | undefined;
-	modelConfigs: readonly TypesGen.ChatModelConfig[];
+	modelConfigs: readonly TypesGen.ChatModel[];
 	catalogModelCount: number;
 	hasManagedAPIKey: boolean;
 	hasCatalogAPIKey: boolean;
@@ -20,7 +20,7 @@ export type ProviderState = {
 	baseURL: string;
 };
 
-type CatalogProvider = TypesGen.ChatModelsResponse["providers"][number];
+type CatalogProvider = TypesGen.ChatModelAvailabilityResponse["providers"][number];
 
 const envPresetProviders = new Set(["openai", "anthropic"]);
 
@@ -42,7 +42,7 @@ const isDatabaseProviderConfig = (
 };
 
 const getCatalogProviders = (
-	catalog: TypesGen.ChatModelsResponse | null | undefined,
+	catalog: TypesGen.ChatModelAvailabilityResponse | null | undefined,
 ): readonly CatalogProvider[] => {
 	const providers = catalog?.providers;
 	return Array.isArray(providers) ? providers : [];
@@ -86,9 +86,9 @@ type ProviderEntry = {
 
 // Returns provider states ordered alphabetically by display label.
 export const deriveProviderStates = (
-	modelConfigs: readonly TypesGen.ChatModelConfig[],
+	modelConfigs: readonly TypesGen.ChatModel[],
 	providerConfigs: TypesGen.ChatProviderConfig[] | null | undefined,
-	catalog: TypesGen.ChatModelsResponse | null | undefined,
+	catalog: TypesGen.ChatModelAvailabilityResponse | null | undefined,
 ): readonly ProviderState[] => {
 	const orderedEntries: ProviderEntry[] = [];
 	const seenEntries = new Set<string>();
@@ -120,7 +120,7 @@ export const deriveProviderStates = (
 		}
 		includeEntry(key, provider);
 	}
-	const modelStateKey = (modelConfig: TypesGen.ChatModelConfig): string =>
+	const modelStateKey = (modelConfig: TypesGen.ChatModel): string =>
 		readOptionalString(modelConfig.ai_provider_id) ?? "";
 
 	for (const cp of catalogProviders) {
@@ -133,7 +133,7 @@ export const deriveProviderStates = (
 		includeEntry(key, providerConfigsByKey.get(key)?.provider ?? "");
 	}
 
-	const modelConfigsByKey = new Map<string, TypesGen.ChatModelConfig[]>();
+	const modelConfigsByKey = new Map<string, TypesGen.ChatModel[]>();
 	for (const mc of modelConfigs) {
 		const key = modelStateKey(mc);
 		if (!key) continue;

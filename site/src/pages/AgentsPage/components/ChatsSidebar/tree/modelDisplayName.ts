@@ -1,10 +1,10 @@
-import type { Chat, ChatModelConfig } from "#/api/typesGenerated";
+import type { Chat, ChatModel } from "#/api/typesGenerated";
 import type { ModelSelectorOption } from "../../ChatElements";
 import { asString } from "../../ChatElements/runtimeTypeUtils";
 
 export const getModelDisplayName = (
 	lastModelConfigID: Chat["last_model_config_id"] | undefined,
-	modelConfigs: readonly ChatModelConfig[],
+	modelConfigs: readonly ChatModel[],
 	modelOptions: readonly ModelSelectorOption[],
 ) => {
 	const normalizedModelConfigID = asString(lastModelConfigID).trim();

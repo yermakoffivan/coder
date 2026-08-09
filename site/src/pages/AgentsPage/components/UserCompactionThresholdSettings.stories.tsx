@@ -9,7 +9,7 @@ import {
 } from "#/testHelpers/storybook";
 import { UserCompactionThresholdSettings } from "./UserCompactionThresholdSettings";
 
-const mockModelConfigs: TypesGen.ChatModelConfig[] = [
+const mockModelConfigs: TypesGen.ChatModel[] = [
 	{
 		...MockChatModelConfig,
 		id: "model-1",

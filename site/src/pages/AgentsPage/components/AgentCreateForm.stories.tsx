@@ -50,8 +50,8 @@ const modelOptions = [
 ] as const;
 
 const buildModelConfig = (
-	overrides: Partial<TypesGen.ChatModelConfig> = {},
-): TypesGen.ChatModelConfig => ({
+	overrides: Partial<TypesGen.ChatModel> = {},
+): TypesGen.ChatModel => ({
 	...MockChatModelConfig,
 	id: modelConfigID,
 	model: "gpt-4o",
@@ -61,7 +61,7 @@ const buildModelConfig = (
 	...overrides,
 });
 
-const defaultModelConfigs: TypesGen.ChatModelConfig[] = [
+const defaultModelConfigs: TypesGen.ChatModel[] = [
 	buildModelConfig({ is_default: true }),
 	buildModelConfig({
 		id: claudeModelConfigID,

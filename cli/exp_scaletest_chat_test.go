@@ -125,8 +125,8 @@ func chatMessageText(messages []codersdk.ChatMessage, role codersdk.ChatMessageR
 	return b.String(), found
 }
 
-func scaletestModelConfigsForProvider(configs []codersdk.ChatModelConfig, providerID uuid.UUID) []codersdk.ChatModelConfig {
-	matches := make([]codersdk.ChatModelConfig, 0, 1)
+func scaletestModelConfigsForProvider(configs []codersdk.ChatModel, providerID uuid.UUID) []codersdk.ChatModel {
+	matches := make([]codersdk.ChatModel, 0, 1)
 	for _, config := range configs {
 		if config.AIProviderID != providerID {
 			continue

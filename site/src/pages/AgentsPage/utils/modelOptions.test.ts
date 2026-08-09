@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type {
-	ChatModelConfig,
-	ChatModelsResponse,
+	ChatModel,
+	ChatModelAvailabilityResponse,
 	ChatProviderConfig,
 } from "#/api/typesGenerated";
 import {
@@ -26,9 +26,9 @@ import {
 } from "./modelOptions";
 
 const createConfig = (
-	overrides: Partial<ChatModelConfig> &
-		Pick<ChatModelConfig, "id" | "ai_provider_id" | "model">,
-): ChatModelConfig => ({
+	overrides: Partial<ChatModel> &
+		Pick<ChatModel, "id" | "ai_provider_id" | "model">,
+): ChatModel => ({
 	...MockChatModelConfig,
 	context_limit: 0,
 	compression_threshold: 0,
@@ -50,9 +50,9 @@ const providerInfoByID = new Map([
 ]);
 
 const createCatalog = (
-	providers: ChatModelsResponse["providers"],
-	unsupportedProviders: ChatModelsResponse["unsupported_providers"] = [],
-): ChatModelsResponse => ({
+	providers: ChatModelAvailabilityResponse["providers"],
+	unsupportedProviders: ChatModelAvailabilityResponse["unsupported_providers"] = [],
+): ChatModelAvailabilityResponse => ({
 	providers,
 	unsupported_providers: unsupportedProviders,
 });
@@ -902,7 +902,7 @@ describe("providerTypeByIDFromUserConfigs", () => {
 });
 
 describe("getUnsupportedProviderNames", () => {
-	const unsupportedCopilot: ChatModelsResponse["unsupported_providers"] = [
+	const unsupportedCopilot: ChatModelAvailabilityResponse["unsupported_providers"] = [
 		{
 			provider: "copilot",
 			display_name: "GitHub Copilot",

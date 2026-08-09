@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import type { ChatModelConfig } from "#/api/typesGenerated";
+import type { ChatModel } from "#/api/typesGenerated";
 import { MockChatModelConfig } from "#/testHelpers/chatModels";
 import { resolveSpawnModelDisplay } from "./spawnModelDisplay";
 
-const config = (overrides: Partial<ChatModelConfig>): ChatModelConfig => ({
+const config = (overrides: Partial<ChatModel>): ChatModel => ({
 	...MockChatModelConfig,
 	...overrides,
 });

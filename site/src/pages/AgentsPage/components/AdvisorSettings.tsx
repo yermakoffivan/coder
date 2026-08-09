@@ -3,7 +3,7 @@ import { type FC, useId } from "react";
 import { getErrorMessage } from "#/api/errors";
 import type {
 	AdvisorConfig,
-	ChatModelConfig,
+	ChatModel,
 	UpdateAdvisorConfigRequest,
 } from "#/api/typesGenerated";
 import { Button } from "#/components/Button/Button";
@@ -26,7 +26,7 @@ interface AdvisorSettingsProps {
 	isAdvisorConfigLoading: boolean;
 	isAdvisorConfigFetching: boolean;
 	isAdvisorConfigLoadError: boolean;
-	enabledModelConfigs: readonly ChatModelConfig[];
+	enabledModelConfigs: readonly ChatModel[];
 	providerInfoByID: ReadonlyMap<string, ProviderInfo>;
 	modelConfigsError: unknown;
 	isLoadingModelConfigs: boolean;

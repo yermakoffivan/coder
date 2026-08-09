@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, userEvent, waitFor, within } from "storybook/test";
 import type {
-	ChatModelConfig,
+	ChatModel,
 	UserChatProviderConfig,
 } from "#/api/typesGenerated";
 import { MockChatModelConfig } from "#/testHelpers/chatModels";
@@ -25,9 +25,9 @@ const createProvider = (
 });
 
 const createModel = (
-	overrides: Partial<ChatModelConfig> &
-		Pick<ChatModelConfig, "id" | "ai_provider_id" | "model">,
-): ChatModelConfig => ({
+	overrides: Partial<ChatModel> &
+		Pick<ChatModel, "id" | "ai_provider_id" | "model">,
+): ChatModel => ({
 	...MockChatModelConfig,
 	created_at: "2026-03-01T00:00:00.000Z",
 	updated_at: "2026-03-01T00:00:00.000Z",

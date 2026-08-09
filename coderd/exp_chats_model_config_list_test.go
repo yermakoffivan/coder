@@ -158,8 +158,8 @@ func TestChatModelConfigListReadContracts(t *testing.T) {
 	}
 }
 
-func containsChatModelConfig(configs []codersdk.ChatModelConfig, id uuid.UUID) bool {
-	return slices.ContainsFunc(configs, func(config codersdk.ChatModelConfig) bool {
+func containsChatModelConfig(configs []codersdk.ChatModel, id uuid.UUID) bool {
+	return slices.ContainsFunc(configs, func(config codersdk.ChatModel) bool {
 		return config.ID == id
 	})
 }

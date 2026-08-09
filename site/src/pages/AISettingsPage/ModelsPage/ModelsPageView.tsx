@@ -1,7 +1,7 @@
 import { ChevronDownIcon, PlusIcon, SearchIcon } from "lucide-react";
 import { type FC, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
-import type { ChatModelConfig } from "#/api/typesGenerated";
+import type { ChatModel } from "#/api/typesGenerated";
 import { ErrorAlert } from "#/components/Alert/ErrorAlert";
 import { Button } from "#/components/Button/Button";
 import {
@@ -97,7 +97,7 @@ const AddModelDropdown: FC<{
 interface ModelsPageViewProps {
 	isLoading: boolean;
 	error: unknown;
-	models: readonly ChatModelConfig[];
+	models: readonly ChatModel[];
 	providerStates: readonly ProviderState[];
 	providerTypeByID: ReadonlyMap<string, string>;
 }

@@ -4,7 +4,7 @@ import { SectionHeader } from "./components/SectionHeader";
 import { UserCompactionThresholdSettings } from "./components/UserCompactionThresholdSettings";
 
 export interface AgentSettingsCompactionPageViewProps {
-	modelConfigsData: TypesGen.ChatModelConfig[] | undefined;
+	modelConfigsData: TypesGen.ChatModel[] | undefined;
 	providerTypeByID: ReadonlyMap<string, string>;
 	modelConfigsError: unknown;
 	isLoadingModelConfigs: boolean;

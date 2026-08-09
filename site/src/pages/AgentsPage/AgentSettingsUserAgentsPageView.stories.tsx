@@ -14,8 +14,8 @@ const UNAVAILABLE_WARNING =
 	"The saved model is unavailable and will be ignored until you choose a valid model override.";
 
 const buildModelConfig = (
-	overrides: Partial<TypesGen.ChatModelConfig> = {},
-): TypesGen.ChatModelConfig => ({
+	overrides: Partial<TypesGen.ChatModel> = {},
+): TypesGen.ChatModel => ({
 	...MockChatModelConfig,
 	id: "model-default",
 	model: "gpt-4.1-mini",

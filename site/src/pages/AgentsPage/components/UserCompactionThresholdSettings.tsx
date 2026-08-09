@@ -29,7 +29,7 @@ import { cn } from "#/utils/cn";
 import { ProviderIcon } from "./ChatModelAdminPanel/ProviderIcon";
 
 interface UserCompactionThresholdSettingsProps {
-	modelConfigs: readonly TypesGen.ChatModelConfig[];
+	modelConfigs: readonly TypesGen.ChatModel[];
 	providerTypeByID: ReadonlyMap<string, string>;
 	modelConfigsError?: unknown;
 	isLoadingModelConfigs?: boolean;

@@ -1,4 +1,4 @@
-import type { ChatModelConfig, ChatProviderConfig } from "#/api/typesGenerated";
+import type { ChatModel, ChatProviderConfig } from "#/api/typesGenerated";
 import type { ProviderState } from "#/modules/aiModels/providerStates";
 
 const now = "2026-02-18T12:00:00.000Z";
@@ -26,7 +26,7 @@ const MockAnthropicProviderConfig: ChatProviderConfig = {
 	display_name: "Anthropic",
 };
 
-export const mockGPT5: ChatModelConfig = {
+export const mockGPT5: ChatModel = {
 	id: "model-gpt5",
 	ai_provider_id: "prov-openai",
 	model: "gpt-5",
@@ -39,7 +39,7 @@ export const mockGPT5: ChatModelConfig = {
 	updated_at: now,
 };
 
-export const mockClaude: ChatModelConfig = {
+export const mockClaude: ChatModel = {
 	...mockGPT5,
 	id: "model-claude",
 	ai_provider_id: "prov-anthropic",
@@ -48,7 +48,7 @@ export const mockClaude: ChatModelConfig = {
 	is_default: false,
 };
 
-export const mockDisabledModel: ChatModelConfig = {
+export const mockDisabledModel: ChatModel = {
 	...mockGPT5,
 	id: "model-disabled",
 	model: "gpt-4o-mini",
@@ -89,7 +89,7 @@ const MockBedrockProviderConfig: ChatProviderConfig = {
 	display_name: "AWS Bedrock",
 };
 
-export const mockBedrockClaude: ChatModelConfig = {
+export const mockBedrockClaude: ChatModel = {
 	...mockClaude,
 	id: "model-bedrock-claude",
 	ai_provider_id: "prov-bedrock",
@@ -127,7 +127,7 @@ const MockDisabledProviderConfig: ChatProviderConfig = {
 	enabled: false,
 };
 
-export const mockProviderDisabledModel: ChatModelConfig = {
+export const mockProviderDisabledModel: ChatModel = {
 	...mockGPT5,
 	id: "model-provider-disabled",
 	ai_provider_id: "prov-openai-disabled",
@@ -163,7 +163,7 @@ export const MockCopilotProviderState: ProviderState = {
 // still appear in the top-level model list, but `deriveProviderStates`
 // drops them from every providerState.modelConfigs. Stories should feed
 // this fixture through `models` alone; do not add it to a provider state.
-export const mockOrphanedModel: ChatModelConfig = {
+export const mockOrphanedModel: ChatModel = {
 	...mockGPT5,
 	id: "model-orphaned",
 	ai_provider_id: "prov-orphaned",

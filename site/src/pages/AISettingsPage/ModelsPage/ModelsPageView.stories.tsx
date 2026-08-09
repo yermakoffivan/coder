@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, userEvent, within } from "storybook/test";
 import { reactRouterParameters } from "storybook-addon-remix-react-router";
-import type { ChatModelConfig } from "#/api/typesGenerated";
+import type { ChatModel } from "#/api/typesGenerated";
 import ModelsPageView from "./ModelsPageView";
 import {
 	MockAnthropicProviderState,
@@ -197,7 +197,7 @@ export const LoadError: Story = {
 	},
 };
 
-const manyModels: ChatModelConfig[] = Array.from({ length: 23 }, (_, i) => ({
+const manyModels: ChatModel[] = Array.from({ length: 23 }, (_, i) => ({
 	...mockClaude,
 	id: `model-${i}`,
 	model: `model-${i}`,

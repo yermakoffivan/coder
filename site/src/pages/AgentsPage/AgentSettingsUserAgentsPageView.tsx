@@ -17,7 +17,7 @@ export interface AgentSettingsUserAgentsPageViewProps {
 	isRetryingOverrides?: boolean;
 	isLoadingOverrides: boolean;
 	modelOptions: readonly ModelSelectorOption[];
-	modelConfigs: readonly TypesGen.ChatModelConfig[];
+	modelConfigs: readonly TypesGen.ChatModel[];
 	modelConfigsError: unknown;
 	isLoadingModels: boolean;
 	onSaveRootModelOverride: SavePersonalOverride;
