@@ -10,7 +10,7 @@ import type React from "react";
 import { useState } from "react";
 import { useQuery } from "react-query";
 import { Link, useLocation } from "react-router";
-import { chatModelConfigs } from "#/api/queries/chats";
+import { chatModel } from "#/api/queries/chats";
 import { ScrollArea } from "#/components/ScrollArea/ScrollArea";
 import { safeBuildAgentChatPath } from "../../../utils/navigation";
 import { Response } from "../Response";
@@ -194,13 +194,13 @@ export const SubagentTool: React.FC<{
 	const { desktopChatId, onOpenDesktop } = useDesktopPanel();
 	const wantsModelDisplay =
 		descriptor.action === "spawn" && Boolean(descriptor.modelConfigId);
-	const modelConfigsQuery = useQuery({
-		...chatModelConfigs(),
+	const modelConfigQuery = useQuery({
+		...chatModel(descriptor.modelConfigId ?? ""),
 		enabled: wantsModelDisplay,
 	});
 	const modelDisplay: SpawnModelDisplay = wantsModelDisplay
 		? resolveSpawnModelDisplay({
-				configs: modelConfigsQuery.data,
+				configs: modelConfigQuery.data ? [modelConfigQuery.data] : undefined,
 				modelConfigId: descriptor.modelConfigId,
 				reasoningEffort: descriptor.reasoningEffort,
 			})

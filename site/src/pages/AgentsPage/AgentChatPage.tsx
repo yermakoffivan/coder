@@ -27,10 +27,9 @@ import { chatProviderConfigs } from "#/api/queries/aiProviders";
 import { checkAuthorization } from "#/api/queries/authCheck";
 import { buildOptimisticEditedMessage } from "#/api/queries/chatMessageEdits";
 import {
+	availableChatModels,
 	chat,
 	chatMessagesForInfiniteScroll,
-	chatModelConfigs,
-	chatModels,
 	chatQueueConvergence,
 	compactChat,
 	createChatMessage,
@@ -39,6 +38,7 @@ import {
 	interruptChat,
 	invalidateChatEntity,
 	mcpServerConfigs,
+	organizationChatModels,
 	patchChatEntity,
 	promoteChatQueuedMessage,
 	updateChatPlanMode,
@@ -938,8 +938,12 @@ const AgentChatPage: FC = () => {
 	});
 	const workspace = workspaceQuery.data;
 
-	const chatModelsQuery = useQuery(chatModels());
-	const chatModelConfigsQuery = useQuery(chatModelConfigs());
+	const chatOrganizationId = chatQuery.data?.organization_id ?? "";
+	const chatModelsQuery = useQuery(availableChatModels(chatOrganizationId));
+	const chatModelConfigsQuery = useQuery({
+		...organizationChatModels(chatOrganizationId),
+		select: (data) => data.models,
+	});
 	const chatProviderConfigsQuery = useQuery({
 		...chatProviderConfigs(),
 		enabled: permissions.editDeploymentConfig,
@@ -984,6 +988,7 @@ const AgentChatPage: FC = () => {
 		chatModelsQuery,
 		userProviderConfigsQuery,
 	);
+	const isModelDataPending = chatOrganizationId === "" || isModelCatalogLoading;
 	const modelConfigs = chatModelConfigsQuery.data ?? [];
 	const providerCount =
 		permissions.editDeploymentConfig &&
@@ -1344,12 +1349,12 @@ const AgentChatPage: FC = () => {
 	const hasUserFixableModelProviders = hasUserFixableProviders(modelCatalog);
 	const modelSelectorPlaceholder = getModelSelectorPlaceholder(
 		modelOptions,
-		isModelCatalogLoading,
+		isModelDataPending,
 		hasConfiguredModels,
 		modelCatalog,
 	);
 	const modelSelectorHelp = getModelSelectorHelp({
-		isModelCatalogLoading,
+		isModelCatalogLoading: isModelDataPending,
 		hasModelOptions,
 		hasConfiguredModels,
 		hasUserFixableModelProviders,
@@ -1902,7 +1907,7 @@ const AgentChatPage: FC = () => {
 				modelOptions={modelOptions}
 				modelSelectorPlaceholder={modelSelectorPlaceholder}
 				hasModelOptions={hasModelOptions}
-				isModelCatalogLoading={isModelCatalogLoading}
+				isModelCatalogLoading={isModelDataPending}
 				planModeEnabled={planModeEnabled}
 				onPlanModeToggle={handlePlanModeToggle}
 				isSidebarCollapsed={isSidebarCollapsed}
@@ -1992,7 +1997,7 @@ const AgentChatPage: FC = () => {
 			unsupportedProviderNames={unsupportedProviderNames}
 			aiGatewayDisabled={aiGatewayDisabled}
 			hasModelOptions={hasModelOptions}
-			isModelCatalogLoading={isModelCatalogLoading}
+			isModelCatalogLoading={isModelDataPending}
 			planModeEnabled={planModeEnabled}
 			onPlanModeToggle={handlePlanModeToggle}
 			compressionThreshold={compressionThreshold}

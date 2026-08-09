@@ -1,21 +1,28 @@
 import type { FC } from "react";
 import { useMutation, useQuery, useQueryClient } from "react-query";
 import {
-	chatModelConfigs,
-	chatModels,
+	availableChatModels,
+	organizationChatModels,
 	updateUserChatPersonalModelOverride,
 	userChatPersonalModelOverrides,
 	userChatProviderConfigs,
 } from "#/api/queries/chats";
 import type * as TypesGen from "#/api/typesGenerated";
+import { useDashboard } from "#/modules/dashboard/useDashboard";
 import { AgentSettingsUserAgentsPageView } from "./AgentSettingsUserAgentsPageView";
 import { resolveModelSelector } from "./utils/modelOptions";
 
 const AgentSettingsUserAgentsPage: FC = () => {
 	const queryClient = useQueryClient();
+	const { organizations } = useDashboard();
 	const overridesQuery = useQuery(userChatPersonalModelOverrides());
-	const chatModelsQuery = useQuery(chatModels());
-	const modelConfigsQuery = useQuery(chatModelConfigs());
+	const defaultOrganizationId =
+		organizations.find((organization) => organization.is_default)?.id ?? "";
+	const chatModelsQuery = useQuery(availableChatModels(defaultOrganizationId));
+	const modelConfigsQuery = useQuery({
+		...organizationChatModels(defaultOrganizationId),
+		select: (data) => data.models,
+	});
 	const providerConfigsQuery = useQuery(userChatProviderConfigs());
 	const saveRootModelOverrideMutation = useMutation(
 		updateUserChatPersonalModelOverride(queryClient),
@@ -26,6 +33,10 @@ const AgentSettingsUserAgentsPage: FC = () => {
 	const saveExploreModelOverrideMutation = useMutation(
 		updateUserChatPersonalModelOverride(queryClient),
 	);
+
+	const defaultOrgModelConfigs = modelConfigsQuery.data ?? [];
+	const hasDefaultOrgModels = defaultOrgModelConfigs.length > 0;
+
 	const { options: modelOptions, isModelCatalogLoading } = resolveModelSelector(
 		modelConfigsQuery,
 		chatModelsQuery,
@@ -55,9 +66,14 @@ const AgentSettingsUserAgentsPage: FC = () => {
 			isRetryingOverrides={overridesQuery.isFetching}
 			isLoadingOverrides={overridesQuery.isLoading}
 			modelOptions={modelOptions}
-			modelConfigs={modelConfigsQuery.data ?? []}
+			modelConfigs={defaultOrgModelConfigs}
 			modelConfigsError={modelConfigsError}
 			isLoadingModels={isModelCatalogLoading}
+			hasNoDefaultOrgModels={
+				!modelConfigsQuery.isLoading &&
+				modelConfigsQuery.error === null &&
+				!hasDefaultOrgModels
+			}
 			onSaveRootModelOverride={saveModelOverride(
 				"root",
 				saveRootModelOverrideMutation,

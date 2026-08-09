@@ -51,9 +51,7 @@ interface ModelFormProps {
 	onProviderChange: (providerKey: string) => void;
 	isSaving: boolean;
 	isDeleting: boolean;
-	onCreateModel: (
-		req: TypesGen.CreateChatModelRequest,
-	) => Promise<unknown>;
+	onCreateModel: (req: TypesGen.CreateChatModelRequest) => Promise<unknown>;
 	onUpdateModel: (
 		modelConfigId: string,
 		req: TypesGen.UpdateChatModelRequest,
@@ -143,7 +141,7 @@ export const ModelForm: FC<ModelFormProps> = ({
 			const builtModelConfig = buildResult.modelConfig;
 
 			const selectedProviderConfigID =
-				selectedProviderState?.providerConfig?.id;
+				selectedProviderState?.providerDescriptor.id;
 			const editingProviderConfigID = editingModel?.ai_provider_id.trim() ?? "";
 
 			if (isEditing && editingModel) {
@@ -178,10 +176,10 @@ export const ModelForm: FC<ModelFormProps> = ({
 
 				await onUpdateModel(editingModel.id, req);
 			} else {
-				if (!selectedProviderState?.providerConfig) return;
+				if (!selectedProviderState) return;
 
 				const req: TypesGen.CreateChatModelRequest = {
-					ai_provider_id: selectedProviderState.providerConfig.id,
+					ai_provider_id: selectedProviderState.providerDescriptor.id,
 					model: trimmedModel,
 					enabled: values.enabled,
 					is_default: values.isDefault,
@@ -232,8 +230,8 @@ export const ModelForm: FC<ModelFormProps> = ({
 	const hasProviderChange =
 		isEditing &&
 		!!editingModel &&
-		!!selectedProviderState?.providerConfig &&
-		selectedProviderState.providerConfig.id !== editingModel.ai_provider_id;
+		!!selectedProviderState &&
+		selectedProviderState.providerDescriptor.id !== editingModel.ai_provider_id;
 	const canSubmit =
 		!isSaving &&
 		!hasFieldErrors &&
@@ -268,11 +266,9 @@ export const ModelForm: FC<ModelFormProps> = ({
 							/>
 							{selectedProviderState && (
 								<p className="text-sm text-content-secondary m-0">
-									{!selectedProviderState.providerConfig
-										? "Create a managed provider before adding models."
-										: selectedProviderState.providerConfig.enabled === false
-											? `${selectedProviderState.label} is disabled. Enable it before adding models.`
-											: "Set an API key for this provider before adding models."}
+									{selectedProviderState.providerDescriptor.enabled === false
+										? `${selectedProviderState.label} is disabled. Enable it before adding models.`
+										: "Set an API key for this provider before adding models."}
 								</p>
 							)}
 						</div>

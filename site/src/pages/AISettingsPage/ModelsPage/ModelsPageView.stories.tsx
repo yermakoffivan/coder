@@ -2,7 +2,9 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, userEvent, within } from "storybook/test";
 import { reactRouterParameters } from "storybook-addon-remix-react-router";
 import type { ChatModel } from "#/api/typesGenerated";
+import { MockDefaultOrganization } from "#/testHelpers/entities";
 import ModelsPageView from "./ModelsPageView";
+import { OrganizationModelsContext } from "./organizationModels";
 import {
 	MockAnthropicProviderState,
 	MockBedrockProviderState,
@@ -19,6 +21,18 @@ import {
 const meta: Meta<typeof ModelsPageView> = {
 	title: "pages/AISettingsPage/ModelsPage/ModelsPageView",
 	component: ModelsPageView,
+	decorators: [
+		(Story) => (
+			<OrganizationModelsContext.Provider
+				value={{
+					organization: MockDefaultOrganization,
+					organizations: [MockDefaultOrganization],
+				}}
+			>
+				<Story />
+			</OrganizationModelsContext.Provider>
+		),
+	],
 	args: {
 		isLoading: false,
 		error: null,

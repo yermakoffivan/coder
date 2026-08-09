@@ -1,60 +1,53 @@
 import type { FC } from "react";
 import { useQuery } from "react-query";
-import { chatProviderConfigs } from "#/api/queries/aiProviders";
-import { chatModelConfigs, chatModels } from "#/api/queries/chats";
-import { useAuthenticated } from "#/hooks/useAuthenticated";
+import {
+	availableChatModels,
+	organizationChatModels,
+} from "#/api/queries/chats";
 import { deriveProviderStates } from "#/modules/aiModels/providerStates";
-import { RequirePermission } from "#/modules/permissions/RequirePermission";
-import { providerTypeByIDFromConfigs } from "#/pages/AgentsPage/utils/modelOptions";
 import { pageTitle } from "#/utils/page";
 import ModelsPageView from "./ModelsPageView";
+import { useOrganizationModels } from "./organizationModels";
 
 const ModelsPage: FC = () => {
-	const { permissions } = useAuthenticated();
-
-	const providerConfigsQuery = useQuery({
-		...chatProviderConfigs(),
-		enabled: permissions.editDeploymentConfig,
-	});
-	const modelConfigsQuery = useQuery(chatModelConfigs());
-	const modelCatalogQuery = useQuery(chatModels());
-
-	const providerTypeByID = providerTypeByIDFromConfigs(
-		providerConfigsQuery.data,
+	const { organization } = useOrganizationModels();
+	const organizationModelsQuery = useQuery(
+		organizationChatModels(organization.id),
 	);
-
-	const models = (modelConfigsQuery.data ?? []).slice().sort((a, b) => {
-		const aProvider = providerTypeByID.get(a.ai_provider_id) ?? "";
-		const bProvider = providerTypeByID.get(b.ai_provider_id) ?? "";
-		const cmp = aProvider.localeCompare(bProvider);
-		return cmp !== 0 ? cmp : a.model.localeCompare(b.model);
-	});
+	const availableModelsQuery = useQuery(availableChatModels(organization.id));
+	const providers = organizationModelsQuery.data?.providers ?? [];
+	const providerTypeByID = new Map(
+		providers.map((provider) => [provider.id, provider.type]),
+	);
+	const models = (organizationModelsQuery.data?.models ?? [])
+		.slice()
+		.sort((a, b) => {
+			const aProvider = providerTypeByID.get(a.ai_provider_id) ?? "";
+			const bProvider = providerTypeByID.get(b.ai_provider_id) ?? "";
+			const cmp = aProvider.localeCompare(bProvider);
+			return cmp !== 0 ? cmp : a.model.localeCompare(b.model);
+		});
 	const providerStates = deriveProviderStates(
 		models,
-		providerConfigsQuery.data,
-		modelCatalogQuery.data,
+		providers,
+		availableModelsQuery.data,
 	);
 
 	return (
-		<RequirePermission isFeatureVisible={permissions.editDeploymentConfig}>
+		<>
 			<title>{pageTitle("Models", "AI Settings")}</title>
 
 			<ModelsPageView
+				key={organization.id}
 				isLoading={
-					providerConfigsQuery.isLoading ||
-					modelConfigsQuery.isLoading ||
-					modelCatalogQuery.isLoading
+					organizationModelsQuery.isLoading || availableModelsQuery.isLoading
 				}
-				error={
-					providerConfigsQuery.error ??
-					modelConfigsQuery.error ??
-					modelCatalogQuery.error
-				}
+				error={organizationModelsQuery.error ?? availableModelsQuery.error}
 				models={models}
 				providerStates={providerStates}
 				providerTypeByID={providerTypeByID}
 			/>
-		</RequirePermission>
+		</>
 	);
 };
 

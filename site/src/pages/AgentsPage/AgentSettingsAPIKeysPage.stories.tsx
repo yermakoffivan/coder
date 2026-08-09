@@ -1,9 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, userEvent, waitFor, within } from "storybook/test";
-import type {
-	ChatModel,
-	UserChatProviderConfig,
-} from "#/api/typesGenerated";
+import type { ChatModel, UserChatProviderConfig } from "#/api/typesGenerated";
 import { MockChatModelConfig } from "#/testHelpers/chatModels";
 import {
 	AgentSettingsAPIKeysPageView,
@@ -201,6 +198,21 @@ export const ModelsUnavailable: Story = {
 	args: {
 		areModelsUnavailable: true,
 		models: [],
+	},
+};
+
+export const SomeModelsUnavailable: Story = {
+	args: {
+		areModelsUnavailable: true,
+	},
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		expect(
+			canvas.getByText(
+				"Some enabled model badges are temporarily unavailable.",
+			),
+		).toBeVisible();
+		expect(canvas.getByText(baseModel.display_name)).toBeVisible();
 	},
 };
 

@@ -8,7 +8,7 @@ import type {
 	UpdateAIProviderRequest,
 } from "#/api/typesGenerated";
 
-const aiProvidersListKey = ["ai", "providers"] as const;
+export const aiProvidersListKey = ["ai", "providers"] as const;
 
 export const aiProviderKeyFor = (idOrName: string) =>
 	[...aiProvidersListKey, idOrName] as const;

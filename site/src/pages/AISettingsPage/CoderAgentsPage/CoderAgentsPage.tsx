@@ -1,12 +1,11 @@
 import type { FC } from "react";
 import { useMutation, useQuery, useQueryClient } from "react-query";
-import { chatProviderConfigs } from "#/api/queries/aiProviders";
 import {
 	chatAdvisorConfig,
 	chatComputerUseProvider,
-	chatModelConfigs,
 	chatModelOverride,
 	chatPersonalModelOverridesAdminSettings,
+	organizationChatModels,
 	updateChatAdvisorConfig,
 	updateChatComputerUseProvider,
 	updateChatModelOverride,
@@ -16,7 +15,7 @@ import type * as TypesGen from "#/api/typesGenerated";
 import { useAuthenticated } from "#/hooks/useAuthenticated";
 import { useDashboard } from "#/modules/dashboard/useDashboard";
 import { RequirePermission } from "#/modules/permissions/RequirePermission";
-import { providerInfoByIDFromConfigs } from "#/pages/AgentsPage/utils/modelOptions";
+import { providerInfoByIDFromDescriptors } from "#/pages/AgentsPage/utils/modelOptions";
 import { pageTitle } from "#/utils/page";
 import { CoderAgentsPageView } from "./CoderAgentsPageView";
 
@@ -29,13 +28,15 @@ const compactionOverrideContext: TypesGen.ChatModelOverrideContext =
 
 const CoderAgentsPage: FC = () => {
 	const { permissions } = useAuthenticated();
-	const { experiments } = useDashboard();
+	const { experiments, organizations } = useDashboard();
 	const queryClient = useQueryClient();
 	const canEditDeploymentConfig = permissions.editDeploymentConfig;
 	const showAdvisorSettings = experiments.includes("chat-advisor");
 	const showVirtualDesktopSettings = experiments.includes(
 		"chat-virtual-desktop",
 	);
+	const defaultOrganizationId =
+		organizations.find((organization) => organization.is_default)?.id ?? "";
 
 	const personalModelOverridesAdminSettingsQuery = useQuery({
 		...chatPersonalModelOverridesAdminSettings(),
@@ -57,7 +58,9 @@ const CoderAgentsPage: FC = () => {
 		...chatModelOverride(compactionOverrideContext),
 		enabled: canEditDeploymentConfig,
 	});
-	const modelConfigsQuery = useQuery(chatModelConfigs());
+	const modelConfigsQuery = useQuery(
+		organizationChatModels(defaultOrganizationId),
+	);
 	const advisorConfigQuery = useQuery({
 		...chatAdvisorConfig(),
 		enabled: canEditDeploymentConfig && showAdvisorSettings,
@@ -65,10 +68,6 @@ const CoderAgentsPage: FC = () => {
 	const computerUseProviderQuery = useQuery({
 		...chatComputerUseProvider(),
 		enabled: canEditDeploymentConfig && showVirtualDesktopSettings,
-	});
-	const providerConfigsQuery = useQuery({
-		...chatProviderConfigs(),
-		enabled: canEditDeploymentConfig,
 	});
 	const savePersonalModelOverridesAdminSettingsMutation = useMutation(
 		updateChatPersonalModelOverridesAdminSettings(queryClient),
@@ -92,9 +91,10 @@ const CoderAgentsPage: FC = () => {
 		updateChatComputerUseProvider(queryClient),
 	);
 
-	const providerInfoByID = providerInfoByIDFromConfigs(
-		providerConfigsQuery.data,
+	const providerInfoByID = providerInfoByIDFromDescriptors(
+		modelConfigsQuery.data?.providers,
 	);
+	const defaultOrgModelConfigs = modelConfigsQuery.data?.models ?? [];
 
 	return (
 		<RequirePermission isFeatureVisible={canEditDeploymentConfig}>
@@ -121,17 +121,11 @@ const CoderAgentsPage: FC = () => {
 				titleGenerationModelOverrideData={titleGenerationModelQuery.data}
 				compactionModelOverrideData={compactionModelQuery.data}
 				exploreModelOverrideData={exploreModelOverrideQuery.data}
-				modelConfigsData={modelConfigsQuery.data}
+				modelConfigsData={defaultOrgModelConfigs}
 				providerInfoByID={providerInfoByID}
-				modelConfigsError={
-					modelConfigsQuery.error ?? providerConfigsQuery.error
-				}
-				isLoadingModelConfigs={
-					modelConfigsQuery.isLoading || providerConfigsQuery.isLoading
-				}
-				isFetchingModelConfigs={
-					modelConfigsQuery.isFetching || providerConfigsQuery.isFetching
-				}
+				modelConfigsError={modelConfigsQuery.error}
+				isLoadingModelConfigs={modelConfigsQuery.isLoading}
+				isFetchingModelConfigs={modelConfigsQuery.isFetching}
 				onSaveGeneralModelOverride={saveGeneralModelOverrideMutation.mutate}
 				isSavingGeneralModelOverride={
 					saveGeneralModelOverrideMutation.isPending

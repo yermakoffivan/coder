@@ -50,7 +50,6 @@ export const ChatTreeNode: FC<ChatTreeNodeProps> = ({ chat, isChildNode }) => {
 		visibleChatIDs,
 		normalizedSearch,
 		expandedById,
-		modelOptions,
 		modelConfigs,
 		chatErrorReasons,
 		activeChatId,
@@ -75,7 +74,6 @@ export const ChatTreeNode: FC<ChatTreeNodeProps> = ({ chat, isChildNode }) => {
 	const modelName = getModelDisplayName(
 		chat.last_model_config_id,
 		modelConfigs,
-		modelOptions,
 	);
 	const errorReason =
 		chat.status === "error"

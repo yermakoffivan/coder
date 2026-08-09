@@ -11,14 +11,14 @@ import {
 import { API } from "#/api/api";
 import { getAuthorizationKey } from "#/api/queries/authCheck";
 import {
+	availableChatModelsKey,
 	chatDiffContentsKey,
 	chatEntityKey,
 	chatListKey,
 	chatMessagesKey,
-	chatModelConfigs,
-	chatModelsKey,
 	chatPromptsKey,
 	mcpServersKey,
+	organizationChatModelsKey,
 	toChatListParams,
 } from "#/api/queries/chats";
 import { workspaceByIdKey } from "#/api/queries/workspaces";
@@ -301,8 +301,14 @@ const buildQueries = (
 			key: workspaceByIdKey(mockWorkspace.id),
 			data: mockWorkspace,
 		},
-		{ key: chatModelsKey, data: mockModelCatalog },
-		{ key: chatModelConfigs().queryKey, data: mockModelConfigs },
+		{
+			key: availableChatModelsKey(chat.organization_id),
+			data: mockModelCatalog,
+		},
+		{
+			key: organizationChatModelsKey(chat.organization_id),
+			data: { models: mockModelConfigs, providers: [] },
+		},
 		{ key: mcpServersKey, data: [] },
 		buildChatAuthorizationQuery(chat, {
 			canShareChat: {

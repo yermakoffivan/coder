@@ -1,22 +1,13 @@
 import type { Chat, ChatModel } from "#/api/typesGenerated";
-import type { ModelSelectorOption } from "../../ChatElements";
 import { asString } from "../../ChatElements/runtimeTypeUtils";
 
 export const getModelDisplayName = (
 	lastModelConfigID: Chat["last_model_config_id"] | undefined,
 	modelConfigs: readonly ChatModel[],
-	modelOptions: readonly ModelSelectorOption[],
 ) => {
 	const normalizedModelConfigID = asString(lastModelConfigID).trim();
 	if (!normalizedModelConfigID) {
 		return "Default model";
-	}
-
-	const modelOption = modelOptions.find(
-		(option) => option.id === normalizedModelConfigID,
-	);
-	if (modelOption?.displayName) {
-		return modelOption.displayName;
 	}
 
 	const modelConfig = modelConfigs.find(

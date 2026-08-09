@@ -38,7 +38,7 @@ export interface CoderAgentsPageViewProps {
 	titleGenerationModelOverrideData?: TypesGen.ChatModelOverrideResponse;
 	compactionModelOverrideData?: TypesGen.ChatModelOverrideResponse;
 	exploreModelOverrideData?: TypesGen.ChatModelOverrideResponse;
-	modelConfigsData: TypesGen.ChatModel[] | undefined;
+	modelConfigsData: readonly TypesGen.ChatModel[] | undefined;
 	providerInfoByID: ReadonlyMap<string, ProviderInfo>;
 	modelConfigsError: unknown;
 	isLoadingModelConfigs: boolean;

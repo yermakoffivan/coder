@@ -10,6 +10,7 @@ import { TooltipProvider } from "#/components/Tooltip/Tooltip";
 import { ThemeOverride } from "#/contexts/ThemeProvider";
 import { DashboardContext } from "#/modules/dashboard/DashboardProvider";
 import { MockChat } from "#/testHelpers/chatEntities";
+import { MockChatModelConfig } from "#/testHelpers/chatModels";
 import {
 	MockAppearanceConfig,
 	MockBuildInfo,
@@ -103,7 +104,6 @@ const defaultSidebarFilters: AgentSidebarFilters = {
 const defaultProps: React.ComponentProps<typeof ChatsSidebar> = {
 	chats: [buildChat({ id: "chat-1", title: "Chat One" })],
 	chatErrorReasons: {},
-	modelOptions: [],
 	modelConfigs: [],
 	onArchiveAgent: vi.fn(),
 	onUnarchiveAgent: vi.fn(),
@@ -566,44 +566,20 @@ describe("ChatsSidebar load-more behavior", () => {
 
 describe("ChatsSidebar model display names", () => {
 	it("uses the chat model config ID to pick the correct duplicate model label", () => {
-		const modelOptions = [
-			{
-				id: "config-fast",
-				provider: "openai",
-				model: "gpt-4o",
-				displayName: "GPT-4o (Fast)",
-			},
-			{
-				id: "config-quality",
-				provider: "openai",
-				model: "gpt-4o",
-				displayName: "GPT-4o (Quality)",
-			},
-		];
 		const modelConfigs: TypesGen.ChatModel[] = [
 			{
-				organization_id: "00000000-0000-0000-0000-000000000000",
+				...MockChatModelConfig,
 				id: "config-fast",
-				ai_provider_id: "prov-openai",
 				model: "gpt-4o",
 				display_name: "GPT-4o (Fast)",
-				enabled: true,
-				is_default: false,
-				context_limit: 128_000,
-				compression_threshold: 70,
 				created_at: oneWeekAgo,
 				updated_at: oneWeekAgo,
 			},
 			{
-				organization_id: "00000000-0000-0000-0000-000000000000",
+				...MockChatModelConfig,
 				id: "config-quality",
-				ai_provider_id: "prov-openai",
 				model: "gpt-4o",
 				display_name: "GPT-4o (Quality)",
-				enabled: true,
-				is_default: false,
-				context_limit: 128_000,
-				compression_threshold: 70,
 				created_at: oneWeekAgo,
 				updated_at: oneWeekAgo,
 			},
@@ -620,7 +596,6 @@ describe("ChatsSidebar model display names", () => {
 							last_model_config_id: "config-quality",
 						}),
 					]}
-					modelOptions={modelOptions}
 					modelConfigs={modelConfigs}
 				/>
 			</Wrapper>,
@@ -641,14 +616,6 @@ describe("ChatsSidebar model display names", () => {
 							title: "Chat from pubsub",
 							last_model_config_id: "00000000-0000-0000-0000-000000000000",
 						}),
-					]}
-					modelOptions={[
-						{
-							id: "config-real",
-							provider: "openai",
-							model: "gpt-4o",
-							displayName: "GPT-4o",
-						},
 					]}
 				/>
 			</Wrapper>,
@@ -671,12 +638,14 @@ describe("ChatsSidebar model display names", () => {
 							last_model_config_id: "config-real",
 						}),
 					]}
-					modelOptions={[
+					modelConfigs={[
 						{
+							...MockChatModelConfig,
 							id: "config-real",
-							provider: "openai",
 							model: "gpt-4o",
-							displayName: "GPT-4o",
+							display_name: "GPT-4o",
+							created_at: oneWeekAgo,
+							updated_at: oneWeekAgo,
 						},
 					]}
 				/>
@@ -691,12 +660,14 @@ describe("ChatsSidebar model display names", () => {
 });
 
 describe("ChatsSidebar subtitles", () => {
-	const modelOptions = [
+	const modelConfigs: TypesGen.ChatModel[] = [
 		{
+			...MockChatModelConfig,
 			id: "model-1",
-			provider: "openai",
 			model: "gpt-4o",
-			displayName: "GPT-4o",
+			display_name: "GPT-4o",
+			created_at: oneWeekAgo,
+			updated_at: oneWeekAgo,
 		},
 	];
 
@@ -712,7 +683,7 @@ describe("ChatsSidebar subtitles", () => {
 							last_turn_summary: "Updated the Terraform template",
 						}),
 					]}
-					modelOptions={modelOptions}
+					modelConfigs={modelConfigs}
 				/>
 			</Wrapper>,
 		);
@@ -740,7 +711,7 @@ describe("ChatsSidebar subtitles", () => {
 							last_turn_summary: "Provisioned a workspace",
 						}),
 					]}
-					modelOptions={modelOptions}
+					modelConfigs={modelConfigs}
 				/>
 			</Wrapper>,
 		);
@@ -762,7 +733,7 @@ describe("ChatsSidebar subtitles", () => {
 							title: "Model fallback chat",
 						}),
 					]}
-					modelOptions={modelOptions}
+					modelConfigs={modelConfigs}
 				/>
 			</Wrapper>,
 		);
@@ -782,7 +753,7 @@ describe("ChatsSidebar subtitles", () => {
 							last_turn_summary: "   ",
 						}),
 					]}
-					modelOptions={modelOptions}
+					modelConfigs={modelConfigs}
 				/>
 			</Wrapper>,
 		);

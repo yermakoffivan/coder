@@ -160,6 +160,7 @@ const buildArgs = (
 	modelConfigs,
 	modelConfigsError: undefined,
 	isLoadingModels: false,
+	hasNoDefaultOrgModels: false,
 	onSaveRootModelOverride: fn(),
 	isSavingRootModelOverride: false,
 	isSaveRootModelOverrideError: false,
@@ -695,6 +696,26 @@ export const SaveErrorState: Story = {
 				"Failed to save general subagent model override.",
 			),
 		).toBeInTheDocument();
+	},
+};
+
+export const NoDefaultOrgModels: Story = {
+	args: buildArgs({
+		hasNoDefaultOrgModels: true,
+		modelOptions: [],
+		modelConfigs: [],
+	}),
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		expect(
+			canvas.getByText(
+				/Personal model overrides are managed per organization/i,
+			),
+		).toBeInTheDocument();
+		const rootSection = await getSection(canvasElement, "Root agent model");
+		expect(
+			within(rootSection).getByRole("button", { name: "Save" }),
+		).toBeDisabled();
 	},
 };
 

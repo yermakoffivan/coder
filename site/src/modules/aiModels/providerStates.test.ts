@@ -3,7 +3,7 @@ import type * as TypesGen from "#/api/typesGenerated";
 import {
 	MockChatModelConfig,
 	MockChatModelProvider,
-	MockChatProviderConfig,
+	MockChatModelProviderDescriptor,
 } from "#/testHelpers/chatModels";
 import {
 	canManageProviderModels,
@@ -12,173 +12,67 @@ import {
 } from "./providerStates";
 
 const baseProviderState: ProviderState = {
-	key: "prov-openai",
-	provider: "openai",
-	label: "OpenAI",
-	providerConfig: MockChatProviderConfig,
+	key: MockChatModelProviderDescriptor.id,
+	provider: MockChatModelProviderDescriptor.type,
+	label: MockChatModelProviderDescriptor.display_name,
+	providerDescriptor: MockChatModelProviderDescriptor,
 	modelConfigs: [],
 	catalogModelCount: 0,
-	hasManagedAPIKey: true,
-	hasCatalogAPIKey: false,
 	hasEffectiveAPIKey: true,
 	allowUserAPIKey: false,
-	isEnvPreset: false,
-	baseURL: "",
 };
 
 describe("deriveProviderStates", () => {
-	it("orders providers alphabetically by display label", () => {
-		const providerConfigs = [
+	it("orders descriptors by display label", () => {
+		const descriptors: TypesGen.ChatModelProviderDescriptor[] = [
 			{
-				...MockChatProviderConfig,
-				id: "prov-openai",
-				provider: "openai",
-				display_name: "OpenAI",
+				...MockChatModelProviderDescriptor,
+				id: "google-id",
+				type: "google",
+				display_name: "Google",
+			},
+			{
+				...MockChatModelProviderDescriptor,
+				id: "anthropic-id",
+				type: "anthropic",
+				display_name: "Anthropic",
 			},
 		];
-		const catalog: TypesGen.ChatModelAvailabilityResponse = {
-			providers: [
-				{ ...MockChatModelProvider, provider: "google" },
-				{ ...MockChatModelProvider, provider: "anthropic" },
-			],
-			unsupported_providers: [],
-		};
 
-		const states = deriveProviderStates([], providerConfigs, catalog);
+		const states = deriveProviderStates([], descriptors, undefined);
 
-		expect(states.map((s) => s.provider)).toEqual([
+		expect(states.map((state) => state.provider)).toEqual([
 			"anthropic",
 			"google",
-			"openai",
 		]);
-		expect(states.map((s) => s.label)).toEqual([
-			"Anthropic",
-			"Google",
-			"OpenAI",
+	});
+
+	it("matches model configs to descriptors by ai_provider_id", () => {
+		const modelConfigs = [
+			{ ...MockChatModelConfig, id: "m1" },
+			{ ...MockChatModelConfig, id: "m2" },
+		];
+
+		const states = deriveProviderStates(
+			modelConfigs,
+			[MockChatModelProviderDescriptor],
+			undefined,
+		);
+
+		expect(states[0].modelConfigs.map((model) => model.id)).toEqual([
+			"m1",
+			"m2",
 		]);
-		expect(states[0].hasEffectiveAPIKey).toBe(true);
-		expect(states[1].hasEffectiveAPIKey).toBe(true);
-		expect(states[2].hasEffectiveAPIKey).toBe(true);
 	});
 
-	it("matches model configs to provider configs by ai_provider_id", () => {
-		const providerConfigs = [
-			{ ...MockChatProviderConfig, id: "prov-openai", provider: "openai" },
-		];
-		const modelConfigs = [
-			{
-				...MockChatModelConfig,
-				id: "m1",
-				ai_provider_id: "prov-openai",
-			},
-			{ ...MockChatModelConfig, id: "m2", ai_provider_id: "prov-openai" },
-		];
-
-		const states = deriveProviderStates(modelConfigs, providerConfigs, null);
-
-		expect(states).toHaveLength(1);
-		expect(states[0].key).toBe("prov-openai");
-		expect(states[0].modelConfigs.map((m) => m.id)).toEqual(["m1", "m2"]);
-	});
-
-	it("treats bedrock with central_api_key_enabled as having an effective key", () => {
-		const providerConfigs = [
-			{
-				...MockChatProviderConfig,
-				id: "prov-bedrock",
-				provider: "bedrock",
-				has_api_key: false,
-				central_api_key_enabled: true,
-			},
-		];
-
-		const states = deriveProviderStates([], providerConfigs, null);
-
-		expect(states[0].hasEffectiveAPIKey).toBe(true);
-	});
-
-	it("drops models without ai_provider_id", () => {
-		const providerConfigs = [
-			{ ...MockChatProviderConfig, id: "prov-a", provider: "openai" },
-			{ ...MockChatProviderConfig, id: "prov-b", provider: "openai" },
-		];
-		const modelConfigs = [
-			{ ...MockChatModelConfig, id: "m1", ai_provider_id: "" },
-		];
-
-		const states = deriveProviderStates(modelConfigs, providerConfigs, null);
-
-		expect(states.flatMap((s) => s.modelConfigs)).toHaveLength(0);
-	});
-
-	it("detects env-preset providers from the catalog when no config exists", () => {
-		const catalog: TypesGen.ChatModelAvailabilityResponse = {
-			providers: [
-				{ ...MockChatModelProvider, provider: "openai", available: true },
-			],
-			unsupported_providers: [],
-		};
-
-		const states = deriveProviderStates([], null, catalog);
-
-		expect(states).toHaveLength(1);
-		expect(states[0].provider).toBe("openai");
-		expect(states[0].isEnvPreset).toBe(true);
-		expect(states[0].hasCatalogAPIKey).toBe(true);
-	});
-
-	it("flags env-preset providers via the provider config source", () => {
-		const providerConfigs = [
-			{
-				...MockChatProviderConfig,
-				id: "prov-openai",
-				provider: "openai",
-				source: "env_preset" as const,
-			},
-		];
-
-		const states = deriveProviderStates([], providerConfigs, null);
-
-		expect(states[0].isEnvPreset).toBe(true);
-		expect(states[0].providerConfig).toBeUndefined();
-	});
-
-	it("treats an unavailable catalog provider as having a key unless the api key is missing", () => {
-		const catalog: TypesGen.ChatModelAvailabilityResponse = {
+	it("uses availability only for catalog model counts", () => {
+		const availability: TypesGen.ChatModelAvailabilityResponse = {
 			providers: [
 				{
 					...MockChatModelProvider,
-					provider: "openai",
-					available: false,
-					unavailable_reason: "fetch_failed",
-				},
-			],
-			unsupported_providers: [],
-		};
-
-		const states = deriveProviderStates([], null, catalog);
-
-		expect(states[0].hasCatalogAPIKey).toBe(true);
-	});
-
-	it("derives label, catalogModelCount, and baseURL from the inputs", () => {
-		const providerConfigs = [
-			{
-				...MockChatProviderConfig,
-				id: "prov-openai",
-				provider: "openai",
-				display_name: "Custom OpenAI",
-				base_url: "https://custom.example.com/v1",
-			},
-		];
-		const catalog: TypesGen.ChatModelAvailabilityResponse = {
-			providers: [
-				{
-					...MockChatModelProvider,
-					provider: "openai",
 					models: [
 						{
-							id: "gpt-x",
+							id: "openai:gpt-x",
 							provider: "openai",
 							model: "gpt-x",
 							display_name: "GPT-X",
@@ -189,33 +83,44 @@ describe("deriveProviderStates", () => {
 			unsupported_providers: [],
 		};
 
-		const states = deriveProviderStates([], providerConfigs, catalog);
+		const states = deriveProviderStates(
+			[],
+			[MockChatModelProviderDescriptor],
+			availability,
+		);
 
-		expect(states[0].label).toBe("Custom OpenAI");
 		expect(states[0].catalogModelCount).toBe(1);
-		expect(states[0].baseURL).toBe("https://custom.example.com/v1");
+	});
+
+	it("uses descriptor key and credential fields", () => {
+		const descriptor: TypesGen.ChatModelProviderDescriptor = {
+			...MockChatModelProviderDescriptor,
+			has_api_key: false,
+			has_user_api_key: true,
+			allow_user_api_key: true,
+		};
+
+		const states = deriveProviderStates([], [descriptor], undefined);
+
+		expect(states[0]).toMatchObject({
+			key: descriptor.id,
+			hasEffectiveAPIKey: true,
+			allowUserAPIKey: true,
+		});
 	});
 });
 
 describe("canManageProviderModels", () => {
-	const baseState = baseProviderState;
-
-	it("returns false without a managed provider config", () => {
-		expect(
-			canManageProviderModels({ ...baseState, providerConfig: undefined }),
-		).toBe(false);
-	});
-
 	it("returns true when the provider has an effective API key", () => {
-		expect(canManageProviderModels(baseState)).toBe(true);
+		expect(canManageProviderModels(baseProviderState)).toBe(true);
 	});
 
 	it("returns true when user-supplied API keys are allowed", () => {
 		expect(
 			canManageProviderModels({
-				...baseState,
+				...baseProviderState,
 				hasEffectiveAPIKey: false,
-				providerConfig: { ...MockChatProviderConfig, allow_user_api_key: true },
+				allowUserAPIKey: true,
 			}),
 		).toBe(true);
 	});
@@ -223,12 +128,9 @@ describe("canManageProviderModels", () => {
 	it("returns false with no key and user keys disallowed", () => {
 		expect(
 			canManageProviderModels({
-				...baseState,
+				...baseProviderState,
 				hasEffectiveAPIKey: false,
-				providerConfig: {
-					...MockChatProviderConfig,
-					allow_user_api_key: false,
-				},
+				allowUserAPIKey: false,
 			}),
 		).toBe(false);
 	});
@@ -236,8 +138,11 @@ describe("canManageProviderModels", () => {
 	it("returns false when the provider is disabled", () => {
 		expect(
 			canManageProviderModels({
-				...baseState,
-				providerConfig: { ...MockChatProviderConfig, enabled: false },
+				...baseProviderState,
+				providerDescriptor: {
+					...MockChatModelProviderDescriptor,
+					enabled: false,
+				},
 			}),
 		).toBe(false);
 	});

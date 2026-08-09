@@ -1,4 +1,5 @@
 import { lazy, Suspense } from "react";
+import { useQuery } from "react-query";
 import {
 	createBrowserRouter,
 	createRoutesFromChildren,
@@ -6,13 +7,20 @@ import {
 	Outlet,
 	Route,
 	ScrollRestoration,
+	useLocation,
 	useParams,
 } from "react-router";
+import { ErrorAlert } from "./components/Alert/ErrorAlert";
 import { GlobalErrorBoundary } from "./components/ErrorBoundary/GlobalErrorBoundary";
 import { Loader } from "./components/Loader/Loader";
 import { RequireAuth } from "./contexts/auth/RequireAuth";
 import { useAuthenticated } from "./hooks/useAuthenticated";
 import { DashboardLayout } from "./modules/dashboard/DashboardLayout";
+import { useDashboard } from "./modules/dashboard/useDashboard";
+import {
+	manageableModelOrganizations,
+	NoManageableModelOrganizations,
+} from "./pages/AISettingsPage/ModelsPage/organizationModels";
 import AuditPage from "./pages/AuditPage/AuditPage";
 import ConnectionLogPage from "./pages/ConnectionLogPage/ConnectionLogPage";
 import { HealthLayout } from "./pages/HealthPage/HealthLayout";
@@ -435,6 +443,9 @@ const AISettingsGatewayKeysPage = lazy(
 const AISettingsModelsPage = lazy(
 	() => import("./pages/AISettingsPage/ModelsPage/ModelsPage"),
 );
+const AISettingsOrganizationModelsLayout = lazy(
+	() => import("./pages/AISettingsPage/ModelsPage/OrganizationModelsLayout"),
+);
 const AISettingsInstructionsPage = lazy(
 	() => import("./pages/AISettingsPage/InstructionsPage/InstructionsPage"),
 );
@@ -475,11 +486,48 @@ const AISettingsIndexRedirect = () => {
 		return <Navigate to="/ai/settings/gateway-keys" replace />;
 	}
 
-	if (permissions.editDeploymentConfig) {
+	if (
+		permissions.createAnyChatModelConfig ||
+		permissions.editAnyChatModelConfig
+	) {
 		return <Navigate to="/ai/settings/models" replace />;
 	}
 
 	return <Navigate to="/ai/settings/providers" replace />;
+};
+
+/**
+ * Redirects the legacy /ai/settings/models routes to the first organization
+ * the caller can manage chat model configs in, preferring the default org.
+ */
+const AISettingsModelsRedirect = () => {
+	const { organizations } = useDashboard();
+	const location = useLocation();
+	const manageableOrgsQuery = useQuery(
+		manageableModelOrganizations(organizations),
+	);
+
+	if (manageableOrgsQuery.isLoading) {
+		return <Loader fullscreen />;
+	}
+
+	if (manageableOrgsQuery.error !== null) {
+		return <ErrorAlert error={manageableOrgsQuery.error} />;
+	}
+
+	const manageable = manageableOrgsQuery.data ?? [];
+	const target = manageable.find((org) => org.is_default) ?? manageable[0];
+	if (!target) {
+		return <NoManageableModelOrganizations />;
+	}
+
+	const suffix = location.pathname.replace(/^\/ai\/settings\/models/, "");
+	return (
+		<Navigate
+			to={`/ai/settings/organizations/${target.name}/models${suffix}${location.search}`}
+			replace
+		/>
+	);
 };
 
 const GlobalLayout = () => {
@@ -754,7 +802,12 @@ export const router = createBrowserRouter(
 							element={<AISettingsGatewayKeysPage />}
 						/>
 						<Route index element={<AISettingsIndexRedirect />} />
-						<Route path="models" element={<AISettingsModelsPage />} />
+						<Route path="models" element={<AISettingsModelsRedirect />} />
+						<Route path="models/add" element={<AISettingsModelsRedirect />} />
+						<Route
+							path="models/:modelId"
+							element={<AISettingsModelsRedirect />}
+						/>
 						<Route
 							path="instructions"
 							element={<AISettingsInstructionsPage />}
@@ -762,11 +815,17 @@ export const router = createBrowserRouter(
 						<Route path="lifecycle" element={<AISettingsLifecyclePage />} />
 						<Route path="coder-agents" element={<CoderAgentsPage />} />
 						<Route path="templates" element={<AISettingsTemplatesPage />} />
-						<Route path="models/add" element={<AISettingsAddModelPage />} />
 						<Route
-							path="models/:modelId"
-							element={<AISettingsUpdateModelPage />}
-						/>
+							path="organizations/:organization"
+							element={<AISettingsOrganizationModelsLayout />}
+						>
+							<Route path="models" element={<AISettingsModelsPage />} />
+							<Route path="models/add" element={<AISettingsAddModelPage />} />
+							<Route
+								path="models/:modelId"
+								element={<AISettingsUpdateModelPage />}
+							/>
+						</Route>
 						<Route path="mcp-servers" element={<AISettingsMCPServersPage />} />
 						<Route
 							path="mcp-servers/add"

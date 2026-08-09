@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, screen, userEvent, waitFor, within } from "storybook/test";
 import { reactRouterParameters } from "storybook-addon-remix-react-router";
-import { chatModelConfigsKey } from "#/api/queries/chats";
+import { chatModelKey } from "#/api/queries/chats";
 import { workspaceBuildLogs } from "#/api/queries/workspaceBuilds";
 import { workspaceByIdKey } from "#/api/queries/workspaces";
 import type * as TypesGen from "#/api/typesGenerated";
@@ -758,7 +758,9 @@ export const SubagentSpawnWithModelAndEffort: Story = {
 		},
 	},
 	parameters: {
-		queries: [{ key: chatModelConfigsKey, data: [mockChatModelConfig] }],
+		queries: [
+			{ key: chatModelKey(mockChatModelConfig.id), data: mockChatModelConfig },
+		],
 	},
 	play: async ({ canvasElement }) => {
 		const canvas = within(canvasElement);
@@ -788,7 +790,9 @@ export const SubagentSpawnWithModelDefaultEffort: Story = {
 		},
 	},
 	parameters: {
-		queries: [{ key: chatModelConfigsKey, data: [mockChatModelConfig] }],
+		queries: [
+			{ key: chatModelKey(mockChatModelConfig.id), data: mockChatModelConfig },
+		],
 	},
 	play: async ({ canvasElement }) => {
 		const canvas = within(canvasElement);
@@ -820,7 +824,9 @@ export const SubagentSpawnWithEffortOnly: Story = {
 		},
 	},
 	parameters: {
-		queries: [{ key: chatModelConfigsKey, data: [mockChatModelConfig] }],
+		queries: [
+			{ key: chatModelKey(mockChatModelConfig.id), data: mockChatModelConfig },
+		],
 	},
 	play: async ({ canvasElement }) => {
 		const canvas = within(canvasElement);
@@ -848,7 +854,12 @@ export const SubagentSpawnWithUnknownModelConfig: Story = {
 		},
 	},
 	parameters: {
-		queries: [{ key: chatModelConfigsKey, data: [mockChatModelConfig] }],
+		queries: [
+			{
+				key: chatModelKey("00000000-0000-0000-0000-000000000000"),
+				data: null,
+			},
+		],
 	},
 	play: async ({ canvasElement }) => {
 		const canvas = within(canvasElement);

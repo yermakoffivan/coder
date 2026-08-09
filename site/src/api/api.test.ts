@@ -432,18 +432,21 @@ describe("api.ts", () => {
 	});
 
 	describe("chat configuration endpoints", () => {
+		const organizationId = "organization/id";
+
 		it.each<[string, () => Promise<unknown>, unknown]>([
 			[
-				"/api/experimental/chats/models",
-				() => API.experimental.getChatModels(),
+				"/api/experimental/organizations/organization%2Fid/chats/models/available",
+				() => API.experimental.getAvailableChatModels(organizationId),
 				{
 					providers: [],
+					unsupported_providers: [],
 				},
 			],
 			[
-				"/api/experimental/chats/model-configs",
-				() => API.experimental.getChatModelConfigs(),
-				[],
+				"/api/experimental/organizations/organization%2Fid/chats/models",
+				() => API.experimental.getOrganizationChatModels(organizationId),
+				{ models: [], providers: [] },
 			],
 		])("returns response data for %s", async (path, request, responseData) => {
 			vi.spyOn(axiosInstance, "get").mockResolvedValueOnce({
@@ -458,12 +461,12 @@ describe("api.ts", () => {
 
 		it.each<[string, () => Promise<unknown>]>([
 			[
-				"/api/experimental/chats/models",
-				() => API.experimental.getChatModels(),
+				"/api/experimental/organizations/organization%2Fid/chats/models/available",
+				() => API.experimental.getAvailableChatModels(organizationId),
 			],
 			[
-				"/api/experimental/chats/model-configs",
-				() => API.experimental.getChatModelConfigs(),
+				"/api/experimental/organizations/organization%2Fid/chats/models",
+				() => API.experimental.getOrganizationChatModels(organizationId),
 			],
 		])("rethrows axios errors for %s", async (path, request) => {
 			const expectedError = new Error("request failed");

@@ -7,7 +7,7 @@ import {
 } from "../components/ChatElements/runtimeTypeUtils";
 
 type CatalogModelLike =
-	| TypesGen.MinimalChatModel
+	| TypesGen.ChatModel
 	| {
 			readonly id?: unknown;
 			readonly display_name?: unknown;
@@ -74,7 +74,7 @@ const isProviderConfiguredInCatalog = (
 	return unavailableReason !== "" && unavailableReason !== "missing_api_key";
 };
 
-export const hasConfiguredModelsInCatalog = (
+const hasConfiguredModelsInCatalog = (
 	catalog: ModelCatalogLike | null | undefined,
 ): boolean => {
 	return getCatalogProviders(catalog).some(isProviderConfiguredInCatalog);
@@ -166,22 +166,20 @@ export type ProviderInfo = {
 	readonly enabled?: boolean;
 };
 
-// providerInfoByIDFromConfigs and providerInfoByIDFromUserConfigs build
-// the ai_provider_id -> provider metadata lookup that
-// getModelOptionsFromConfigs needs. The admin and user provider endpoints
-// expose the provider id under different field names (id vs provider_id), so
-// each source has its own helper to bake in the correct field.
-export const providerInfoByIDFromConfigs = (
-	providerConfigs: readonly TypesGen.ChatProviderConfig[] | null | undefined,
+export const providerInfoByIDFromDescriptors = (
+	providerDescriptors:
+		| readonly TypesGen.ChatModelProviderDescriptor[]
+		| null
+		| undefined,
 ): ReadonlyMap<string, ProviderInfo> =>
 	new Map(
-		(providerConfigs ?? []).map((providerConfig) => [
-			providerConfig.id,
+		(providerDescriptors ?? []).map((providerDescriptor) => [
+			providerDescriptor.id,
 			{
-				provider: providerConfig.provider,
-				displayName: providerConfig.display_name,
-				icon: providerConfig.icon,
-				enabled: providerConfig.enabled,
+				provider: providerDescriptor.type,
+				displayName: providerDescriptor.display_name,
+				icon: providerDescriptor.icon,
+				enabled: providerDescriptor.enabled,
 			},
 		]),
 	);
@@ -201,16 +199,6 @@ export const providerInfoByIDFromUserConfigs = (
 				icon: providerConfig.icon,
 				enabled: providerConfig.enabled,
 			},
-		]),
-	);
-
-export const providerTypeByIDFromConfigs = (
-	providerConfigs: readonly TypesGen.ChatProviderConfig[] | null | undefined,
-): ReadonlyMap<string, string> =>
-	new Map(
-		Array.from(providerInfoByIDFromConfigs(providerConfigs), ([id, info]) => [
-			id,
-			info.provider,
 		]),
 	);
 

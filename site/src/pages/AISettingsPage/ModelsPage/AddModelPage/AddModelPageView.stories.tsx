@@ -1,6 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, userEvent, within } from "storybook/test";
+import { MockDefaultOrganization } from "#/testHelpers/entities";
 import { withToaster } from "#/testHelpers/storybook";
+import { OrganizationModelsContext } from "../organizationModels";
 import {
 	MockAnthropicProviderState,
 	MockCopilotProviderState,
@@ -11,9 +13,23 @@ import AddModelPageView from "./AddModelPageView";
 const meta: Meta<typeof AddModelPageView> = {
 	title: "pages/AISettingsPage/ModelsPage/AddModelPageView",
 	component: AddModelPageView,
-	decorators: [withToaster],
+	decorators: [
+		(Story) => (
+			<OrganizationModelsContext.Provider
+				value={{
+					organization: MockDefaultOrganization,
+					organizations: [MockDefaultOrganization],
+				}}
+			>
+				<Story />
+			</OrganizationModelsContext.Provider>
+		),
+		withToaster,
+	],
 	args: {
 		isLoading: false,
+		loadError: null,
+		refetchError: null,
 		providerStates: [MockOpenAIProviderState, MockAnthropicProviderState],
 		selectedProviderState: MockOpenAIProviderState,
 		isSaving: false,
@@ -73,6 +89,25 @@ export const ProviderNotFound: Story = {
 	play: async ({ canvasElement }) => {
 		const canvas = within(canvasElement);
 		await expect(canvas.getByText("Provider not found")).toBeInTheDocument();
+	},
+};
+
+export const LoadError: Story = {
+	args: { loadError: new Error("Failed to load models") },
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		await expect(canvas.getByText("Failed to load models")).toBeVisible();
+	},
+};
+
+export const RefetchError: Story = {
+	args: { refetchError: new Error("Failed to refresh models") },
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		expect(canvas.getByText("Failed to refresh models")).toBeVisible();
+		expect(
+			canvas.getByRole("heading", { name: /add an? OpenAI model/i }),
+		).toBeVisible();
 	},
 };
 

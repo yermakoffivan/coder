@@ -17,9 +17,7 @@ import {
 	getUnsupportedProviderNames,
 	hasConfiguredProviderConfigs,
 	hasUserFixableProviders,
-	providerInfoByIDFromConfigs,
 	providerInfoByIDFromUserConfigs,
-	providerTypeByIDFromConfigs,
 	providerTypeByIDFromUserConfigs,
 	resolveModelOptionId,
 	resolveModelSelector,
@@ -807,28 +805,6 @@ describe("filterConfigsWithEnabledProvider", () => {
 	});
 });
 
-describe("providerInfoByIDFromConfigs", () => {
-	it("maps ChatProviderConfig.id to provider metadata", () => {
-		const map = providerInfoByIDFromConfigs([
-			{
-				...MockChatProviderConfig,
-				id: "prov-openai",
-				provider: "openai",
-				display_name: "Primary OpenAI",
-				icon: "/icon/openai.svg",
-			},
-		]);
-
-		expect(map.get("prov-openai")).toEqual({
-			provider: "openai",
-			displayName: "Primary OpenAI",
-			icon: "/icon/openai.svg",
-			enabled: true,
-		});
-		expect(map.size).toBe(1);
-	});
-});
-
 describe("providerInfoByIDFromUserConfigs", () => {
 	it("maps UserChatProviderConfig.provider_id to provider metadata", () => {
 		const map = providerInfoByIDFromUserConfigs([
@@ -851,28 +827,6 @@ describe("providerInfoByIDFromUserConfigs", () => {
 			enabled: true,
 		});
 		expect(map.size).toBe(1);
-	});
-});
-
-describe("providerTypeByIDFromConfigs", () => {
-	it("maps ChatProviderConfig.id to its provider type", () => {
-		const map = providerTypeByIDFromConfigs([
-			{ ...MockChatProviderConfig, id: "prov-openai", provider: "openai" },
-			{
-				...MockChatProviderConfig,
-				id: "prov-anthropic",
-				provider: "anthropic",
-			},
-		]);
-
-		expect(map.get("prov-openai")).toBe("openai");
-		expect(map.get("prov-anthropic")).toBe("anthropic");
-		expect(map.size).toBe(2);
-	});
-
-	it("returns an empty map for nullish input", () => {
-		expect(providerTypeByIDFromConfigs(undefined).size).toBe(0);
-		expect(providerTypeByIDFromConfigs(null).size).toBe(0);
 	});
 });
 
@@ -902,12 +856,13 @@ describe("providerTypeByIDFromUserConfigs", () => {
 });
 
 describe("getUnsupportedProviderNames", () => {
-	const unsupportedCopilot: ChatModelAvailabilityResponse["unsupported_providers"] = [
-		{
-			provider: "copilot",
-			display_name: "GitHub Copilot",
-		},
-	];
+	const unsupportedCopilot: ChatModelAvailabilityResponse["unsupported_providers"] =
+		[
+			{
+				provider: "copilot",
+				display_name: "GitHub Copilot",
+			},
+		];
 
 	it("returns names when no supported provider is configured", () => {
 		const catalog = createCatalog([], unsupportedCopilot);

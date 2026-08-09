@@ -44,6 +44,7 @@ import {
 import { ProviderIcon } from "#/pages/AISettingsPage/ProvidersPage/components/ProviderIcon";
 import { paginateItems } from "#/utils/paginateItems";
 import { ModelRow } from "./components/ModelRow";
+import { useOrganizationModelsPath } from "./organizationModels";
 
 const MODELS_PAGE_SIZE = 10;
 const ALL_PROVIDERS_VALUE = "all";
@@ -53,6 +54,7 @@ const AddModelDropdown: FC<{
 	align?: "start" | "end";
 }> = ({ providerStates, align = "end" }) => {
 	const navigate = useNavigate();
+	const modelsPath = useOrganizationModelsPath();
 	const manageableProviderStates = providerStates.filter(
 		canManageProviderModels,
 	);
@@ -78,7 +80,7 @@ const AddModelDropdown: FC<{
 							key={providerState.key}
 							onSelect={() =>
 								void navigate(
-									`/ai/settings/models/add?provider=${encodeURIComponent(
+									`${modelsPath}/add?provider=${encodeURIComponent(
 										providerState.key,
 									)}`,
 								)
@@ -110,6 +112,7 @@ const ModelsPageView: FC<ModelsPageViewProps> = ({
 	providerTypeByID,
 }) => {
 	const navigate = useNavigate();
+	const modelsPath = useOrganizationModelsPath();
 	const [page, setPage] = useState(1);
 	const [searchQuery, setSearchQuery] = useState("");
 	const [providerFilter, setProviderFilter] =
@@ -139,7 +142,7 @@ const ModelsPageView: FC<ModelsPageViewProps> = ({
 		const map = new Map<string, boolean>();
 		for (const providerState of providerStates) {
 			for (const providerModel of providerState.modelConfigs) {
-				map.set(providerModel.id, Boolean(providerState.providerConfig));
+				map.set(providerModel.id, true);
 			}
 		}
 		return map;
@@ -149,10 +152,7 @@ const ModelsPageView: FC<ModelsPageViewProps> = ({
 		const map = new Map<string, boolean>();
 		for (const providerState of providerStates) {
 			for (const providerModel of providerState.modelConfigs) {
-				map.set(
-					providerModel.id,
-					providerState.providerConfig?.enabled === true,
-				);
+				map.set(providerModel.id, providerState.providerDescriptor.enabled);
 			}
 		}
 		return map;
@@ -297,7 +297,7 @@ const ModelsPageView: FC<ModelsPageViewProps> = ({
 								providerEnabled={
 									providerEnabledByModelId.get(model.id) ?? false
 								}
-								onClick={() => void navigate(`/ai/settings/models/${model.id}`)}
+								onClick={() => void navigate(`${modelsPath}/${model.id}`)}
 							/>
 						))
 					)}

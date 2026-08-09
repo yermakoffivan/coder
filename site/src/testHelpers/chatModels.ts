@@ -1,13 +1,15 @@
 import type {
 	ChatModel,
 	ChatModelProvider,
+	ChatModelProviderDescriptor,
 	ChatProviderConfig,
 } from "#/api/typesGenerated";
 import { MOCK_TIMESTAMP } from "./chatEntities";
+import { MockDefaultOrganization } from "./entities";
 
 export const MockChatModelConfig: ChatModel = {
-	organization_id: "00000000-0000-0000-0000-000000000000",
 	id: "model-1",
+	organization_id: MockDefaultOrganization.id,
 	ai_provider_id: "provider-1",
 	model: "gpt-5",
 	display_name: "gpt-5",
@@ -39,4 +41,15 @@ export const MockChatModelProvider: ChatModelProvider = {
 	provider: "openai",
 	available: true,
 	models: [],
+};
+
+export const MockChatModelProviderDescriptor: ChatModelProviderDescriptor = {
+	id: "provider-1",
+	type: "openai",
+	display_name: "OpenAI",
+	icon: "",
+	enabled: true,
+	has_api_key: true,
+	has_user_api_key: false,
+	allow_user_api_key: false,
 };
