@@ -39,6 +39,7 @@ import {
 	interruptChat,
 	invalidateChatEntity,
 	mcpServerConfigs,
+	openChat,
 	patchChatEntity,
 	promoteChatQueuedMessage,
 	updateChatPlanMode,
@@ -918,7 +919,7 @@ const AgentChatPage: FC = () => {
 	};
 
 	const chatQuery = useQuery({
-		...chat(agentId ?? ""),
+		...openChat(agentId ?? ""),
 		enabled: Boolean(agentId),
 	});
 	const chatMessagesQuery = useInfiniteQuery({

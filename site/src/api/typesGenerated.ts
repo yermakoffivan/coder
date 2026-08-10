@@ -1946,8 +1946,7 @@ export interface Chat {
 	readonly context?: ChatContext;
 	/**
 	 * QueuedForCapacity reports that the chat is waiting for a concurrent
-	 * agent slot. It is derived, not stored: single-chat reads and
-	 * capacity_change watch events carry it, list responses leave it false.
+	 * agent slot. Single-chat reads derive it; list responses leave it false.
 	 */
 	readonly queued_for_capacity?: boolean;
 	readonly warnings?: readonly string[];
@@ -3544,7 +3543,6 @@ export interface ChatWatchEvent {
 // From codersdk/chats.go
 export type ChatWatchEventKind =
 	| "action_required"
-	| "capacity_change"
 	| "chat_summary_change"
 	| "context_dirty"
 	| "created"
@@ -3556,7 +3554,6 @@ export type ChatWatchEventKind =
 
 export const ChatWatchEventKinds: ChatWatchEventKind[] = [
 	"action_required",
-	"capacity_change",
 	"chat_summary_change",
 	"context_dirty",
 	"created",
