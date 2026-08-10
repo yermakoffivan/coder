@@ -310,11 +310,11 @@ export const AgentCreateForm: FC<AgentCreateFormProps> = ({
 		enabled: Boolean(organizationId),
 	});
 	const mcpServers = mcpServersQuery.data ?? [];
-	// Sending before the organization's MCP list resolves would
-	// silently drop its default-on server selection, so the composer
-	// waits for this query.
+	// Sending before the MCP list resolves would silently drop default-on
+	// selections. Gate on missing data, not isSuccess: a failed background
+	// refetch flips isSuccess off while cached data stays usable.
 	const isMCPSelectionUnresolved =
-		Boolean(organizationId) && !mcpServersQuery.isSuccess;
+		Boolean(organizationId) && mcpServersQuery.data === undefined;
 	const [planModeEnabled, setPlanModeEnabled] = useState(false);
 	const hasModelOptions = modelOptions.length > 0;
 	const hasConfiguredModels = hasConfiguredModelsInCatalog(modelCatalog);
