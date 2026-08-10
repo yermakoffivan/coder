@@ -146,34 +146,6 @@ func TestResolveCompactionOverrideConfig_DisabledConfigFallsBack(t *testing.T) {
 	require.Nil(t, override)
 }
 
-func TestResolveCompactionOverrideConfig_CrossOrgFallsBack(t *testing.T) {
-	t.Parallel()
-
-	ctx := testutil.Context(t, testutil.WaitShort)
-	ctrl := gomock.NewController(t)
-	db := dbmock.NewMockStore(ctrl)
-	logger := slogtest.Make(t, &slogtest.Options{IgnoreErrors: true})
-	chat, _ := titleOverrideTestChatAndMessages(t)
-	chat.OrganizationID = uuid.New()
-	overrideConfig := titleOverrideModelConfig("gpt-4.1", true)
-	overrideConfig.OrganizationID = uuid.New()
-	providerID := uuid.New()
-	overrideConfig.AIProviderID = uuid.NullUUID{UUID: providerID, Valid: true}
-
-	db.EXPECT().GetChatCompactionModelOverride(gomock.Any()).Return(overrideConfig.ID.String(), nil)
-	db.EXPECT().GetChatModelConfigByID(gomock.Any(), overrideConfig.ID).Return(overrideConfig, nil)
-	db.EXPECT().GetAIProviderByID(gomock.Any(), providerID).Return(aibridgeTestAIProvider(providerID, "primary-openai", database.AIProviderTypeOpenai), nil).AnyTimes()
-	db.EXPECT().GetAIProviderKeysByProviderID(gomock.Any(), providerID).Return([]database.AIProviderKey{{
-		ProviderID: providerID,
-		APIKey:     "test-key",
-	}}, nil).AnyTimes()
-
-	server := titleOverrideTestServer(db, logger)
-	override, err := server.resolveCompactionOverrideConfig(ctx, chat)
-	require.NoError(t, err)
-	require.Nil(t, override)
-}
-
 func TestResolveCompactionOverrideConfig_MissingCredentialsFallsBack(t *testing.T) {
 	t.Parallel()
 

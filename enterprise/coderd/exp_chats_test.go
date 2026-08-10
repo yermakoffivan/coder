@@ -14,7 +14,6 @@ import (
 	"github.com/coder/coder/v2/coderd/aibridgedtest"
 	"github.com/coder/coder/v2/coderd/coderdtest"
 	"github.com/coder/coder/v2/coderd/database"
-	"github.com/coder/coder/v2/coderd/database/dbgen"
 	"github.com/coder/coder/v2/coderd/database/dbtestutil"
 	"github.com/coder/coder/v2/coderd/rbac"
 	"github.com/coder/coder/v2/coderd/util/ptr"
@@ -1080,7 +1079,7 @@ func TestCreateChatNonDefaultOrg(t *testing.T) {
 
 	ctx := testutil.Context(t, testutil.WaitLong)
 
-	client, db, firstUser := coderdenttest.NewWithDatabase(t, &coderdenttest.Options{
+	client, firstUser := coderdenttest.New(t, &coderdenttest.Options{
 		Options: &coderdtest.Options{
 			DeploymentValues: func() *codersdk.DeploymentValues {
 				v := coderdtest.DeploymentValues(t)
@@ -1108,13 +1107,6 @@ func TestCreateChatNonDefaultOrg(t *testing.T) {
 
 	// Create a second (non-default) org via the API.
 	secondOrg := coderdenttest.CreateOrganization(t, client, coderdenttest.CreateOrganizationOptions{})
-	dbgen.ChatModelConfig(t, db, database.ChatModelConfig{
-		AIProviderID:   uuid.NullUUID{UUID: provider.ID, Valid: true},
-		Model:          "gpt-4o-mini",
-		Enabled:        true,
-		IsDefault:      true,
-		OrganizationID: secondOrg.ID,
-	})
 
 	// Create a member with agents-access in both orgs.
 	memberClientRaw, member := coderdtest.CreateAnotherUser(
@@ -1156,7 +1148,7 @@ func TestListChats_OrgAdminOnlySeesOwnChats(t *testing.T) {
 
 	ctx := testutil.Context(t, testutil.WaitLong)
 
-	client, db, firstUser := coderdenttest.NewWithDatabase(t, &coderdenttest.Options{
+	client, firstUser := coderdenttest.New(t, &coderdenttest.Options{
 		Options: &coderdtest.Options{
 			DeploymentValues: func() *codersdk.DeploymentValues {
 				v := coderdtest.DeploymentValues(t)
@@ -1184,13 +1176,6 @@ func TestListChats_OrgAdminOnlySeesOwnChats(t *testing.T) {
 
 	// Create a second (non-default) org.
 	secondOrg := coderdenttest.CreateOrganization(t, client, coderdenttest.CreateOrganizationOptions{})
-	dbgen.ChatModelConfig(t, db, database.ChatModelConfig{
-		AIProviderID:   uuid.NullUUID{UUID: provider.ID, Valid: true},
-		Model:          "gpt-4o-mini",
-		Enabled:        true,
-		IsDefault:      true,
-		OrganizationID: secondOrg.ID,
-	})
 
 	// Create a member with agents-access in both orgs.
 	memberClientRaw, _ := coderdtest.CreateAnotherUser(

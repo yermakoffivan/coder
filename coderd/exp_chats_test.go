@@ -338,83 +338,32 @@ func insertAssistantMessage(
 func TestPostChats(t *testing.T) {
 	t.Parallel()
 
-	t.Run("SuccessNonDefaultOrgUsesOrgDefault", func(t *testing.T) {
+	t.Run("SuccessNonDefaultOrgUsesDeploymentDefault", func(t *testing.T) {
 		t.Parallel()
 
 		ctx := testutil.Context(t, testutil.WaitLong)
 		client, db := newChatClientWithDatabase(t)
 		_ = coderdtest.CreateFirstUser(t, client.Client)
-		defaultConfig := createChatModelConfig(t, client)
+		modelConfig := createChatModelConfig(t, client)
+
+		// A member of a non-default org cannot read the default
+		// organization object, but omitting model_config_id must still
+		// resolve the deployment default while every config lives there.
 		org := dbgen.Organization(t, db, database.Organization{IsDefault: false})
-		orgConfig := dbgen.ChatModelConfig(t, db, database.ChatModelConfig{
-			AIProviderID:   uuid.NullUUID{UUID: defaultConfig.AIProviderID, Valid: true},
-			Model:          "org-default-" + uuid.NewString(),
-			Enabled:        true,
-			IsDefault:      true,
-			OrganizationID: org.ID,
-		})
 		memberClientRaw, _ := coderdtest.CreateAnotherUser(t, client.Client, org.ID, rbac.ScopedRoleAgentsAccess(org.ID))
 		memberClient := codersdk.NewExperimentalClient(memberClientRaw)
 
 		chat, err := memberClient.CreateChat(ctx, codersdk.CreateChatRequest{
 			OrganizationID: org.ID,
-			Content: []codersdk.ChatInputPart{{
-				Type: codersdk.ChatInputPartTypeText,
-				Text: "hello from a non-default org",
-			}},
+			Content: []codersdk.ChatInputPart{
+				{
+					Type: codersdk.ChatInputPartTypeText,
+					Text: "hello from a non-default org",
+				},
+			},
 		})
 		require.NoError(t, err)
-		require.Equal(t, orgConfig.ID, chat.LastModelConfigID)
-	})
-
-	t.Run("NonDefaultOrgWithoutDefaultRejected", func(t *testing.T) {
-		t.Parallel()
-
-		ctx := testutil.Context(t, testutil.WaitLong)
-		client, db := newChatClientWithDatabase(t)
-		_ = coderdtest.CreateFirstUser(t, client.Client)
-		_ = createChatModelConfig(t, client)
-		org := dbgen.Organization(t, db, database.Organization{IsDefault: false})
-		memberClientRaw, _ := coderdtest.CreateAnotherUser(t, client.Client, org.ID, rbac.ScopedRoleAgentsAccess(org.ID))
-		memberClient := codersdk.NewExperimentalClient(memberClientRaw)
-
-		_, err := memberClient.CreateChat(ctx, codersdk.CreateChatRequest{
-			OrganizationID: org.ID,
-			Content: []codersdk.ChatInputPart{{
-				Type: codersdk.ChatInputPartTypeText,
-				Text: "no model is configured",
-			}},
-		})
-		sdkErr := requireSDKError(t, err, http.StatusBadRequest)
-		require.Equal(t, "No default chat model config is configured.", sdkErr.Message)
-	})
-
-	t.Run("CrossOrgExplicitModelRejected", func(t *testing.T) {
-		t.Parallel()
-
-		ctx := testutil.Context(t, testutil.WaitLong)
-		client, db := newChatClientWithDatabase(t)
-		firstUser := coderdtest.CreateFirstUser(t, client.Client)
-		defaultConfig := createChatModelConfig(t, client)
-		otherOrg := dbgen.Organization(t, db, database.Organization{IsDefault: false})
-		otherConfig := dbgen.ChatModelConfig(t, db, database.ChatModelConfig{
-			AIProviderID:   uuid.NullUUID{UUID: defaultConfig.AIProviderID, Valid: true},
-			Model:          "cross-org-" + uuid.NewString(),
-			Enabled:        true,
-			IsDefault:      true,
-			OrganizationID: otherOrg.ID,
-		})
-
-		_, err := client.CreateChat(ctx, codersdk.CreateChatRequest{
-			OrganizationID: firstUser.OrganizationID,
-			Content: []codersdk.ChatInputPart{{
-				Type: codersdk.ChatInputPartTypeText,
-				Text: "reject another organization's model",
-			}},
-			ModelConfigID: ptr.Ref(otherConfig.ID),
-		})
-		sdkErr := requireSDKError(t, err, http.StatusBadRequest)
-		require.Equal(t, "Invalid model_config_id: model config not found or disabled.", sdkErr.Message)
+		require.Equal(t, modelConfig.ID, chat.LastModelConfigID)
 	})
 
 	t.Run("Success", func(t *testing.T) {
@@ -7379,40 +7328,6 @@ func TestPostChatMessages(t *testing.T) {
 		require.Equal(t, "Invalid model_config_id: provider is not enabled for this model.", sdkErr.Message)
 	})
 
-	t.Run("CrossOrgModelConfigRejected", func(t *testing.T) {
-		t.Parallel()
-
-		ctx := testutil.Context(t, testutil.WaitLong)
-		client, db := newChatClientWithDatabase(t)
-		firstUser := coderdtest.CreateFirstUser(t, client.Client)
-		defaultConfig := createChatModelConfig(t, client)
-		chat, err := client.CreateChat(ctx, codersdk.CreateChatRequest{
-			OrganizationID: firstUser.OrganizationID,
-			Content: []codersdk.ChatInputPart{{
-				Type: codersdk.ChatInputPartTypeText,
-				Text: "initial message before cross-org switch",
-			}},
-		})
-		require.NoError(t, err)
-
-		otherOrg := dbgen.Organization(t, db, database.Organization{IsDefault: false})
-		otherConfig := dbgen.ChatModelConfig(t, db, database.ChatModelConfig{
-			AIProviderID:   uuid.NullUUID{UUID: defaultConfig.AIProviderID, Valid: true},
-			Model:          "cross-org-send-" + uuid.NewString(),
-			Enabled:        true,
-			OrganizationID: otherOrg.ID,
-		})
-		_, err = client.CreateChatMessage(ctx, chat.ID, codersdk.CreateChatMessageRequest{
-			Content: []codersdk.ChatInputPart{{
-				Type: codersdk.ChatInputPartTypeText,
-				Text: "reject another organization's model",
-			}},
-			ModelConfigID: ptr.Ref(otherConfig.ID),
-		})
-		sdkErr := requireSDKError(t, err, http.StatusBadRequest)
-		require.Equal(t, "Invalid model_config_id: model config not found or disabled.", sdkErr.Message)
-	})
-
 	t.Run("ProviderDisabledDefaultFallbackRejected", func(t *testing.T) {
 		t.Parallel()
 
@@ -8923,47 +8838,6 @@ func TestPatchChatMessage(t *testing.T) {
 		}
 		require.True(t, foundEditedInChat)
 		require.False(t, foundOriginalInChat)
-	})
-
-	t.Run("CrossOrgModelConfigRejected", func(t *testing.T) {
-		t.Parallel()
-
-		ctx := testutil.Context(t, testutil.WaitLong)
-		client, db := newChatClientWithDatabase(t)
-		firstUser := coderdtest.CreateFirstUser(t, client.Client)
-		defaultConfig := createChatModelConfig(t, client)
-		chat, err := client.CreateChat(ctx, codersdk.CreateChatRequest{
-			OrganizationID: firstUser.OrganizationID,
-			Content: []codersdk.ChatInputPart{{
-				Type: codersdk.ChatInputPartTypeText,
-				Text: "before cross-org edit",
-			}},
-		})
-		require.NoError(t, err)
-		messagesResult, err := client.GetChatMessages(ctx, chat.ID, nil)
-		require.NoError(t, err)
-		userMessageID := messagesResult.Messages[0].ID
-
-		otherOrg := dbgen.Organization(t, db, database.Organization{IsDefault: false})
-		otherConfig := dbgen.ChatModelConfig(t, db, database.ChatModelConfig{
-			AIProviderID:   uuid.NullUUID{UUID: defaultConfig.AIProviderID, Valid: true},
-			Model:          "cross-org-edit-" + uuid.NewString(),
-			Enabled:        true,
-			OrganizationID: otherOrg.ID,
-		})
-		_, err = client.EditChatMessage(ctx, chat.ID, userMessageID, codersdk.EditChatMessageRequest{
-			Content: []codersdk.ChatInputPart{{
-				Type: codersdk.ChatInputPartTypeText,
-				Text: "reject another organization's model",
-			}},
-			ModelConfigID: ptr.Ref(otherConfig.ID),
-		})
-		sdkErr := requireSDKError(t, err, http.StatusBadRequest)
-		require.Equal(t, "Invalid model_config_id: model config not found or disabled.", sdkErr.Message)
-
-		storedChat, err := db.GetChatByID(dbauthz.AsSystemRestricted(ctx), chat.ID)
-		require.NoError(t, err)
-		require.Equal(t, defaultConfig.ID, storedChat.LastModelConfigID)
 	})
 
 	t.Run("ReasoningEffort", func(t *testing.T) {
@@ -14105,35 +13979,6 @@ func TestCreateChatPersonalModelOverrideRoot(t *testing.T) {
 		chat := createChat(adminClient, "root model override uses saved reasoning effort", nil)
 		require.Equal(t, reasoningModel.ID, chat.LastModelConfigID)
 		require.Equal(t, ptr.Ref("high"), chat.LastReasoningEffort)
-	})
-
-	t.Run("CrossOrgRootModelFallsBackToOrgDefault", func(t *testing.T) {
-		org := dbgen.Organization(t, db, database.Organization{IsDefault: false})
-		orgModel := dbgen.ChatModelConfig(t, db, database.ChatModelConfig{
-			AIProviderID:   uuid.NullUUID{UUID: defaultModel.AIProviderID, Valid: true},
-			Model:          "org-root-personal-" + uuid.NewString(),
-			Enabled:        true,
-			IsDefault:      true,
-			OrganizationID: org.ID,
-		})
-		otherClientRaw, otherUser := coderdtest.CreateAnotherUser(
-			t,
-			adminClient.Client,
-			org.ID,
-			rbac.ScopedRoleAgentsAccess(org.ID),
-		)
-		otherClient := codersdk.NewExperimentalClient(otherClientRaw)
-		upsertRootRaw(otherUser.ID, "model:"+overrideModel.ID.String())
-
-		chat, err := otherClient.CreateChat(ctx, codersdk.CreateChatRequest{
-			OrganizationID: org.ID,
-			Content: []codersdk.ChatInputPart{{
-				Type: codersdk.ChatInputPartTypeText,
-				Text: "cross-org root model falls back",
-			}},
-		})
-		require.NoError(t, err)
-		require.Equal(t, orgModel.ID, chat.LastModelConfigID)
 	})
 
 	t.Run("UnavailableRootModelFallsBackToDefault", func(t *testing.T) {

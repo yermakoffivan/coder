@@ -1129,9 +1129,13 @@ func TestRegenerateChatTitle_PersistsAndBroadcasts(t *testing.T) {
 		},
 	).Return(nil, nil)
 	db.EXPECT().GetChatTitleGenerationModelOverride(gomock.Any()).Return("", nil)
-	// An empty org list falls through to the chat's fallback model;
-	// strict org scoping reads no other org's configs.
 	db.EXPECT().GetEnabledChatModelConfigsByOrganization(gomock.Any(), gomock.Any()).Return(nil, nil)
+	// An empty org list only triggers the pre-cutover fallback when the
+	// org owns no configs at all, which the missing default proves. The
+	// default org has no default either, so the empty list stands.
+	db.EXPECT().GetDefaultChatModelConfig(gomock.Any(), gomock.Any()).
+		Return(database.ChatModelConfig{}, sql.ErrNoRows).Times(2)
+	db.EXPECT().GetDefaultOrganization(gomock.Any()).Return(database.Organization{ID: uuid.New()}, nil)
 
 	db.EXPECT().InTx(gomock.Any(), nil).DoAndReturn(
 		func(fn func(database.Store) error, opts *database.TxOptions) error {
@@ -1276,9 +1280,13 @@ func TestRegenerateChatTitle_SkipsPersistWhenTitleChangedConcurrently(t *testing
 		},
 	).Return(nil, nil)
 	db.EXPECT().GetChatTitleGenerationModelOverride(gomock.Any()).Return("", nil)
-	// An empty org list falls through to the chat's fallback model;
-	// strict org scoping reads no other org's configs.
 	db.EXPECT().GetEnabledChatModelConfigsByOrganization(gomock.Any(), gomock.Any()).Return(nil, nil)
+	// An empty org list only triggers the pre-cutover fallback when the
+	// org owns no configs at all, which the missing default proves. The
+	// default org has no default either, so the empty list stands.
+	db.EXPECT().GetDefaultChatModelConfig(gomock.Any(), gomock.Any()).
+		Return(database.ChatModelConfig{}, sql.ErrNoRows).Times(2)
+	db.EXPECT().GetDefaultOrganization(gomock.Any()).Return(database.Organization{ID: uuid.New()}, nil)
 
 	db.EXPECT().InTx(gomock.Any(), nil).DoAndReturn(
 		func(fn func(database.Store) error, _ *database.TxOptions) error {
@@ -3797,38 +3805,41 @@ func TestResolveFallbackModelConfigID(t *testing.T) {
 		require.Equal(t, defaultModel.ID, resolved)
 	})
 
-	t.Run("NonDefaultOrgWithoutOwnDefaultMisses", func(t *testing.T) {
+	t.Run("NonDefaultOrgFallsBackToDefaultOrgDefault", func(t *testing.T) {
 		t.Parallel()
 		db, _ := dbtestutil.NewDB(t)
 		ctx := testutil.Context(t, testutil.WaitShort)
 
-		// The chat's org has no configs of its own; the default org has
-		// one. Strict scoping resolves configs only within the chat's
-		// org, so the lookup reports no default.
+		// The chat's org has no configs of its own; the deployment
+		// default lives in the default org. Pre-cutover behavior must
+		// resolve it for chats in any org.
 		otherOrgID := newModelConfigOrg(t, db)
 		defaultOrg, err := db.GetDefaultOrganization(ctx)
 		require.NoError(t, err)
 		provider := newProvider(t, db, true)
-		_ = newModelConfig(t, db, defaultOrg.ID, provider.ID, true)
+		defaultModel := newModelConfig(t, db, defaultOrg.ID, provider.ID, true)
 
-		_, err = resolveFallbackModelConfigID(ctx, db, otherOrgID, uuid.Nil)
-		require.ErrorIs(t, err, ErrNoDefaultChatModelConfig)
+		resolved, err := resolveFallbackModelConfigID(ctx, db, otherOrgID, uuid.Nil)
+		require.NoError(t, err)
+		require.Equal(t, defaultModel.ID, resolved)
 	})
 
-	t.Run("OrgDefaultResolvesAsChatd", func(t *testing.T) {
+	t.Run("FallbackReadsDefaultOrgAsChatd", func(t *testing.T) {
 		t.Parallel()
 		db, _ := dbtestutil.NewDB(t)
 		ctx := testutil.Context(t, testutil.WaitShort)
 
-		// The fallback reads the org default under the chatd subject,
-		// which must be authorized to read chat model configs or every
-		// fallback path fails closed.
-		orgID := newModelConfigOrg(t, db)
+		// The pre-cutover fallback reads the default organization under
+		// the chatd subject, which must be authorized to read
+		// organizations or every fallback path fails closed.
+		otherOrgID := newModelConfigOrg(t, db)
+		defaultOrg, err := db.GetDefaultOrganization(ctx)
+		require.NoError(t, err)
 		provider := newProvider(t, db, true)
-		defaultModel := newModelConfig(t, db, orgID, provider.ID, true)
+		defaultModel := newModelConfig(t, db, defaultOrg.ID, provider.ID, true)
 
 		chatdCtx := dbauthz.AsChatd(ctx)
-		resolved, err := resolveFallbackModelConfigID(chatdCtx, db, orgID, uuid.Nil)
+		resolved, err := resolveFallbackModelConfigID(chatdCtx, db, otherOrgID, uuid.Nil)
 		require.NoError(t, err)
 		require.Equal(t, defaultModel.ID, resolved)
 	})
@@ -3856,23 +3867,9 @@ func TestResolveFallbackModelConfigID(t *testing.T) {
 		provider := newProvider(t, db, true)
 		model := newModelConfig(t, db, orgID, provider.ID, false)
 
-		resolved, err := resolveSendMessageModelConfigID(ctx, db, database.Chat{OrganizationID: orgID}, model.ID)
+		resolved, err := resolveSendMessageModelConfigID(ctx, db, database.Chat{}, model.ID)
 		require.NoError(t, err)
 		require.Equal(t, model.ID, resolved)
-	})
-
-	t.Run("ExplicitCrossOrgModelRejected", func(t *testing.T) {
-		t.Parallel()
-		db, _ := dbtestutil.NewDB(t)
-		ctx := testutil.Context(t, testutil.WaitShort)
-
-		chatOrgID := newModelConfigOrg(t, db)
-		modelOrgID := newModelConfigOrg(t, db)
-		provider := newProvider(t, db, true)
-		model := newModelConfig(t, db, modelOrgID, provider.ID, false)
-
-		_, err := resolveSendMessageModelConfigID(ctx, db, database.Chat{OrganizationID: chatOrgID}, model.ID)
-		require.ErrorIs(t, err, ErrInvalidModelConfigID)
 	})
 
 	// An explicit model whose provider was disabled after the coderd
@@ -3886,7 +3883,7 @@ func TestResolveFallbackModelConfigID(t *testing.T) {
 		disabledProvider := newProvider(t, db, false)
 		model := newModelConfig(t, db, orgID, disabledProvider.ID, false)
 
-		_, err := resolveSendMessageModelConfigID(ctx, db, database.Chat{OrganizationID: orgID}, model.ID)
+		_, err := resolveSendMessageModelConfigID(ctx, db, database.Chat{}, model.ID)
 		require.ErrorIs(t, err, ErrInvalidModelConfigID)
 	})
 
