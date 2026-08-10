@@ -159,13 +159,10 @@ func (api *API) listMCPServerConfigs(rw http.ResponseWriter, r *http.Request) {
 	apiKey := httpmw.APIKey(r)
 	organization := httpmw.OrganizationParam(r)
 
-	// Full view: disabled configs included, management fields unredacted.
-	// Auditors get it to inspect audit-logged resources. Row-level read
-	// follows the per-server ACL, so the full view fetches with system
-	// access after this authorization; auditors hold no blanket config
-	// read, keeping ACL-restricted servers unselectable and
-	// unconnectable for them.
-	// Other members see enabled configs granted by their ACL, redacted.
+	// Full view: disabled configs included, management fields unredacted,
+	// fetched with system access behind this gate. Auditors get it to
+	// inspect audit-logged resources but stay subject to per-server ACLs
+	// elsewhere. Other members see enabled ACL-granted configs, redacted.
 	hasFullView := api.Authorize(r, policy.ActionUpdate, rbac.ResourceMCPServerConfig.InOrg(organization.ID)) ||
 		api.Authorize(r, policy.ActionRead, rbac.ResourceAuditLog.InOrg(organization.ID))
 
