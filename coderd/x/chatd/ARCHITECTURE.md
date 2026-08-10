@@ -17,6 +17,12 @@ Messages and queued messages no longer carry `api_key_id` columns; attribution i
 
 Deleting a synthetic key (password reset, explicit key deletion, dbpurge of long-expired keys) does not touch chat messages, queued messages, or their version fields. Chatd mints a replacement on the next request without mutating history. User suspension and deletion still block delegated gateway authorization.
 
+# Database authorization identities
+
+Chatd's background work runs under the `dbauthz` chatd subject (`dbauthz.AsChatd`), whose site-wide grants are limited to what daemon-wide operation needs: chat lifecycle, workspace read/update, AI provider read, deployment config read, MCP server config read, and `ResourceUser` read-personal for reading users' MCP OAuth tokens. The subject deliberately has no site-wide `ActionUpdatePersonal`: that grant would let any code path holding the chatd context write personal data, including MCP tokens, for arbitrary accounts.
+
+Writes to a user's MCP OAuth token rows (persisting a refreshed token, recording a refresh failure) instead use the per-owner subject `dbauthz.AsChatdTokenOwner(ctx, userID)`, whose read/update personal permissions are user-level and scoped to that one owner ID. The invariant: daemon-wide chatd may read any user's MCP tokens, but may write a token only under the identity of the token's owner. Do not restore a site-wide personal-write grant or route these writes through `AsSystemRestricted`; either would reopen cross-account token writes from the shared daemon context.
+
 # Core state machine
 
 The core state machine describes how a chat's execution state in the database can change over time. A fundamental component of the state machine is the set of valid **states** it can be in. We will consider 2 kinds of states: **execution states** and **ownership states**. These states let us describe what the runtime components of chatd can do with a chat at a given point in time.
