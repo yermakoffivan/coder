@@ -1648,11 +1648,16 @@ func TestChatsTelemetry(t *testing.T) {
 		ContextLimit: 200000,
 	})
 
+	// Create a second organization. Its model config proves that telemetry
+	// reports the owning organization of every configuration.
+	org2 := dbgen.Organization(t, db, database.Organization{})
+
 	// Create a second model config to test full dump.
 	modelCfg2 := dbgen.ChatModelConfig(t, db, database.ChatModelConfig{
-		AIProviderID: uuid.NullUUID{UUID: openaiProvider.ID, Valid: true},
-		Model:        "gpt-4o",
-		DisplayName:  "GPT-4o",
+		AIProviderID:   uuid.NullUUID{UUID: openaiProvider.ID, Valid: true},
+		OrganizationID: org2.ID,
+		Model:          "gpt-4o",
+		DisplayName:    "GPT-4o",
 	})
 
 	// Create a soft-deleted model config — should NOT appear in telemetry.
@@ -1944,7 +1949,7 @@ func TestChatsTelemetry(t *testing.T) {
 
 	cfg2, ok := configMap[modelCfg2.ID]
 	require.True(t, ok)
-	assert.Equal(t, org.ID, cfg2.OrganizationID)
+	assert.Equal(t, org2.ID, cfg2.OrganizationID)
 	assert.Equal(t, "openai", cfg2.Provider)
 	assert.Equal(t, "gpt-4o", cfg2.Model)
 	assert.Equal(t, int64(128000), cfg2.ContextLimit)

@@ -2618,7 +2618,9 @@ type ChatModelConfig struct {
 	Model          string    `json:"model"`
 	ContextLimit   int64     `json:"context_limit"`
 	Enabled        bool      `json:"enabled"`
-	IsDefault      bool      `json:"is_default"`
+	// IsDefault is scoped to OrganizationID. Each organization has at most
+	// one default configuration.
+	IsDefault bool `json:"is_default"`
 }
 
 // ChatDiffStatusSummary contains aggregate PR counts across all

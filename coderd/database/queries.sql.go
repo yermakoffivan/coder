@@ -8558,7 +8558,6 @@ type GetChatModelConfigsForTelemetryRow struct {
 	OrganizationID uuid.UUID `db:"organization_id" json:"organization_id"`
 }
 
-// Returns all model configurations for telemetry snapshot collection.
 // deleted = false guarantees ai_provider_id is non-null, so INNER JOIN is safe.
 func (q *sqlQuerier) GetChatModelConfigsForTelemetry(ctx context.Context) ([]GetChatModelConfigsForTelemetryRow, error) {
 	rows, err := q.db.QueryContext(ctx, getChatModelConfigsForTelemetry)
