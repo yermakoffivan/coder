@@ -1129,6 +1129,7 @@ func (api *API) getUserChatProviderAvailability(
 func (api *API) userCanUseChatModelConfig(
 	ctx context.Context,
 	userID uuid.UUID,
+	organizationID uuid.UUID,
 	modelConfigID uuid.UUID,
 ) (database.ChatModelConfig, chatModelConfigUnavailableReason, error) {
 	if modelConfigID == uuid.Nil {
@@ -1145,7 +1146,7 @@ func (api *API) userCanUseChatModelConfig(
 		}
 		return database.ChatModelConfig{}, chatModelConfigAvailable, err
 	}
-	if !model.Enabled {
+	if model.OrganizationID != organizationID || !model.Enabled {
 		return database.ChatModelConfig{}, chatModelConfigUnavailableModelNotFoundOrDisabled, nil
 	}
 
@@ -1176,9 +1177,10 @@ func (api *API) userCanUseChatModelConfig(
 func (api *API) validateUserChatModelConfigAvailable(
 	ctx context.Context,
 	userID uuid.UUID,
+	organizationID uuid.UUID,
 	modelConfigID uuid.UUID,
 ) (database.ChatModelConfig, int, *codersdk.Response) {
-	modelConfig, reason, err := api.userCanUseChatModelConfig(ctx, userID, modelConfigID)
+	modelConfig, reason, err := api.userCanUseChatModelConfig(ctx, userID, organizationID, modelConfigID)
 	if err != nil {
 		return database.ChatModelConfig{}, http.StatusInternalServerError, &codersdk.Response{
 			Message: "Internal error validating model config override.",
@@ -1219,12 +1221,13 @@ func (api *API) validateUserChatModelConfigAvailable(
 func (api *API) validateExplicitChatModelConfigAvailable(
 	ctx context.Context,
 	userID uuid.UUID,
+	organizationID uuid.UUID,
 	modelConfigID uuid.UUID,
 ) (int, *codersdk.Response) {
 	if modelConfigID == uuid.Nil {
 		return 0, nil
 	}
-	_, status, resp := api.validateUserChatModelConfigAvailable(ctx, userID, modelConfigID)
+	_, status, resp := api.validateUserChatModelConfigAvailable(ctx, userID, organizationID, modelConfigID)
 	return status, resp
 }
 
@@ -2780,7 +2783,7 @@ func (api *API) postChatMessages(rw http.ResponseWriter, r *http.Request) {
 	if req.ModelConfigID != nil {
 		modelConfigID = *req.ModelConfigID
 	}
-	if status, resp := api.validateExplicitChatModelConfigAvailable(ctx, apiKey.UserID, modelConfigID); resp != nil {
+	if status, resp := api.validateExplicitChatModelConfigAvailable(ctx, apiKey.UserID, chat.OrganizationID, modelConfigID); resp != nil {
 		httpapi.Write(ctx, rw, status, *resp)
 		return
 	}
@@ -2955,7 +2958,7 @@ func (api *API) patchChatMessage(rw http.ResponseWriter, r *http.Request) {
 	if req.ModelConfigID != nil {
 		editModelConfigID = *req.ModelConfigID
 	}
-	if status, resp := api.validateExplicitChatModelConfigAvailable(ctx, apiKey.UserID, editModelConfigID); resp != nil {
+	if status, resp := api.validateExplicitChatModelConfigAvailable(ctx, apiKey.UserID, chat.OrganizationID, editModelConfigID); resp != nil {
 		httpapi.Write(ctx, rw, status, *resp)
 		return
 	}
@@ -4351,7 +4354,7 @@ func (api *API) resolveCreateChatModelConfigID(
 				Message: "Invalid model config ID.",
 			}
 		}
-		if _, status, resp := api.validateUserChatModelConfigAvailable(ctx, userID, *req.ModelConfigID); resp != nil {
+		if _, status, resp := api.validateUserChatModelConfigAvailable(ctx, userID, req.OrganizationID, *req.ModelConfigID); resp != nil {
 			return uuid.Nil, nil, status, resp
 		}
 		return *req.ModelConfigID, nil, 0, nil
@@ -4365,7 +4368,7 @@ func (api *API) resolveCreateChatModelConfigID(
 		}
 	}
 	if !personalOverridesEnabled {
-		id, status, resp := api.defaultCreateChatModelConfigID(ctx)
+		id, status, resp := api.defaultCreateChatModelConfigID(ctx, req.OrganizationID)
 		return id, nil, status, resp
 	}
 
@@ -4400,6 +4403,7 @@ func (api *API) resolveCreateChatModelConfigID(
 			_, reason, err := api.userCanUseChatModelConfig(
 				ctx,
 				userID,
+				req.OrganizationID,
 				parsed.ModelConfigID,
 			)
 			if err != nil {
@@ -4428,26 +4432,15 @@ func (api *API) resolveCreateChatModelConfigID(
 		}
 	}
 
-	id, status, resp := api.defaultCreateChatModelConfigID(ctx)
+	id, status, resp := api.defaultCreateChatModelConfigID(ctx, req.OrganizationID)
 	return id, nil, status, resp
 }
 
 func (api *API) defaultCreateChatModelConfigID(
 	ctx context.Context,
+	organizationID uuid.UUID,
 ) (uuid.UUID, int, *codersdk.Response) {
-	// The request carries a validated organization, but the pre-cutover
-	// handler deliberately resolves the deployment-default model until the
-	// API layer completes the organization-scoping cutover. The default-org
-	// lookup is internal and does not expose organization data to the user.
-	//nolint:gocritic // Internal default-org resolution, scoped to this call.
-	defaultOrg, err := api.Database.GetDefaultOrganization(dbauthz.AsChatd(ctx))
-	if err != nil {
-		return uuid.Nil, http.StatusInternalServerError, &codersdk.Response{
-			Message: "Failed to resolve chat model config.",
-			Detail:  err.Error(),
-		}
-	}
-	defaultModelConfig, err := api.Database.GetDefaultChatModelConfig(ctx, defaultOrg.ID)
+	defaultModelConfig, err := api.Database.GetDefaultChatModelConfig(ctx, organizationID)
 	if err != nil {
 		if xerrors.Is(err, sql.ErrNoRows) {
 			return uuid.Nil, http.StatusBadRequest, &codersdk.Response{
@@ -4993,7 +4986,18 @@ func (api *API) putUserChatPersonalModelOverride(rw http.ResponseWriter, r *http
 			})
 			return
 		}
-		modelConfig, status, resp := api.validateUserChatModelConfigAvailable(ctx, apiKey.UserID, parsedModelConfigID)
+		// Personal model overrides are user-global. They select from the
+		// default organization's model configs.
+		//nolint:gocritic // This lookup resolves internal deployment configuration.
+		defaultOrg, err := api.Database.GetDefaultOrganization(dbauthz.AsChatd(ctx))
+		if err != nil {
+			httpapi.Write(ctx, rw, http.StatusInternalServerError, codersdk.Response{
+				Message: "Internal error validating model config override.",
+				Detail:  err.Error(),
+			})
+			return
+		}
+		modelConfig, status, resp := api.validateUserChatModelConfigAvailable(ctx, apiKey.UserID, defaultOrg.ID, parsedModelConfigID)
 		if resp != nil {
 			httpapi.Write(ctx, rw, status, *resp)
 			return

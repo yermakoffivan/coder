@@ -83,7 +83,7 @@ func (p *Server) resolveTitleGenerationModelOverride(
 	if err != nil {
 		return database.ChatModelConfig{}, chatprovider.Model{}, aiGatewayModelRoute{}, overrideSet, err
 	}
-	if !overrideSet {
+	if !overrideSet || modelConfig.OrganizationID != chat.OrganizationID {
 		return database.ChatModelConfig{}, chatprovider.Model{}, aiGatewayModelRoute{}, false, nil
 	}
 	modelConfig = withResolvedReasoningEffort(modelConfig, overrideEffort)

@@ -401,7 +401,7 @@ func TestResolveManualTitleModel_TitleGenerationOverrideUnset(t *testing.T) {
 	require.Equal(t, preferredConfig, gotConfig)
 }
 
-func TestResolveManualTitleModel_NonDefaultOrgUsesDefaultOrgConfigs(t *testing.T) {
+func TestResolveManualTitleModel_CrossOrgConfigsAreInvisible(t *testing.T) {
 	t.Parallel()
 
 	ctx := testutil.Context(t, testutil.WaitShort)
@@ -409,29 +409,11 @@ func TestResolveManualTitleModel_NonDefaultOrgUsesDefaultOrgConfigs(t *testing.T
 	db := dbmock.NewMockStore(ctrl)
 	logger := slogtest.Make(t, &slogtest.Options{IgnoreErrors: true})
 	chat, _ := titleOverrideTestChatAndMessages(t)
-	chat.OrganizationID = uuid.New() // non-default org, no configs of its own
-	defaultOrgID := uuid.New()
-	providerID := uuid.New()
-	preferredConfig := database.ChatModelConfig{
-		ID:             uuid.New(),
-		AIProviderID:   uuid.NullUUID{UUID: providerID, Valid: true},
-		Model:          preferredTitleModels[1].model,
-		Enabled:        true,
-		OrganizationID: defaultOrgID,
-	}
+	chat.OrganizationID = uuid.New()
 
 	db.EXPECT().GetChatTitleGenerationModelOverride(gomock.Any()).Return("", nil)
-	// The chat's org has no enabled configs; the selector must fall
-	// back to the default org's list until the org-scoping cutover.
 	db.EXPECT().GetEnabledChatModelConfigsByOrganization(gomock.Any(), chat.OrganizationID).Return(nil, nil)
-	db.EXPECT().GetDefaultChatModelConfig(gomock.Any(), chat.OrganizationID).
-		Return(database.ChatModelConfig{}, sql.ErrNoRows)
-	db.EXPECT().GetDefaultOrganization(gomock.Any()).Return(database.Organization{ID: defaultOrgID}, nil)
-	db.EXPECT().GetDefaultChatModelConfig(gomock.Any(), defaultOrgID).Return(preferredConfig, nil)
-	db.EXPECT().GetEnabledChatModelConfigsByOrganization(gomock.Any(), defaultOrgID).Return([]database.GetEnabledChatModelConfigsByOrganizationRow{
-		{ChatModelConfig: preferredConfig, Provider: preferredTitleModels[1].provider},
-	}, nil)
-	db.EXPECT().GetAIProviderByID(gomock.Any(), providerID).Return(aibridgeTestAIProvider(providerID, "primary-openai", database.AIProviderTypeOpenai), nil).AnyTimes()
+	db.EXPECT().GetDefaultChatModelConfig(gomock.Any(), chat.OrganizationID).Return(database.ChatModelConfig{}, sql.ErrNoRows)
 
 	server := titleOverrideTestServer(db, logger)
 	model, gotConfig, err := server.resolveManualTitleModel(
@@ -440,9 +422,9 @@ func TestResolveManualTitleModel_NonDefaultOrgUsesDefaultOrgConfigs(t *testing.T
 		chat,
 		modelBuildOptions{ActiveAPIKeyID: uuid.NewString()},
 	)
-	require.NoError(t, err)
-	require.NotNil(t, model)
-	require.Equal(t, preferredConfig, gotConfig)
+	require.ErrorIs(t, err, ErrNoDefaultChatModelConfig)
+	require.False(t, model.Valid())
+	require.Equal(t, database.ChatModelConfig{}, gotConfig)
 }
 
 func TestResolveManualTitleModel_TitleGenerationOverrideUnsetAIProvider(t *testing.T) {
@@ -559,6 +541,37 @@ func TestResolveManualTitleModel_TitleGenerationOverrideSetUsable(t *testing.T) 
 	require.NoError(t, err)
 	require.True(t, model.Valid())
 	require.Equal(t, overrideConfig, gotConfig)
+}
+
+func TestResolveTitleGenerationModelOverride_CrossOrgFallsBack(t *testing.T) {
+	t.Parallel()
+
+	ctx := testutil.Context(t, testutil.WaitShort)
+	ctrl := gomock.NewController(t)
+	db := dbmock.NewMockStore(ctrl)
+	logger := slogtest.Make(t, &slogtest.Options{IgnoreErrors: true})
+	chat, _ := titleOverrideTestChatAndMessages(t)
+	chat.OrganizationID = uuid.New()
+	overrideConfig := titleOverrideModelConfig("gpt-4.1", true)
+	overrideConfig.OrganizationID = uuid.New()
+	providerID := uuid.New()
+	overrideConfig.AIProviderID = uuid.NullUUID{UUID: providerID, Valid: true}
+
+	db.EXPECT().GetChatTitleGenerationModelOverride(gomock.Any()).Return(overrideConfig.ID.String(), nil)
+	db.EXPECT().GetChatModelConfigByID(gomock.Any(), overrideConfig.ID).Return(overrideConfig, nil)
+	db.EXPECT().GetAIProviderByID(gomock.Any(), providerID).Return(aibridgeTestAIProvider(providerID, "primary-openai", database.AIProviderTypeOpenai), nil).AnyTimes()
+	db.EXPECT().GetAIProviderKeysByProviderID(gomock.Any(), providerID).Return([]database.AIProviderKey{{
+		ProviderID: providerID,
+		APIKey:     "test-key",
+	}}, nil).AnyTimes()
+
+	server := titleOverrideTestServer(db, logger)
+	modelConfig, model, route, overrideSet, err := server.resolveTitleGenerationModelOverride(ctx, chat, modelBuildOptions{})
+	require.NoError(t, err)
+	require.False(t, overrideSet)
+	require.Equal(t, database.ChatModelConfig{}, modelConfig)
+	require.False(t, model.Valid())
+	require.Equal(t, aiGatewayModelRoute{}, route)
 }
 
 func TestResolveManualTitleModel_TitleGenerationOverrideMissingCredentials(t *testing.T) {

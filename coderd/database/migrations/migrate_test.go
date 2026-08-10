@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"slices"
@@ -3211,37 +3210,21 @@ func mustJSON(t *testing.T, v any) []byte {
 func TestMigration000566ChatModelConfigOrgExplosion(t *testing.T) {
 	t.Parallel()
 
-	const migrationVersion = 566
+	const previousMigrationVersion = 565
 
 	sqlDB := testSQLDB(t)
-
-	// stepperUpToLatest runs the stepper to completion: a Stepper cannot
-	// stop early, it closes only when the steps are exhausted, and each
-	// call commits the driver's transaction. The assertion only requires
-	// that target was APPLIED, not that it is the latest: a stacked PR may
-	// add a later migration, so encoding "target is latest" would redden
-	// any such child on its merge ref.
-	stepperUpToLatest := func(target uint) {
-		t.Helper()
-		next, err := migrations.Stepper(sqlDB)
+	next, err := migrations.Stepper(sqlDB)
+	require.NoError(t, err)
+	for {
+		version, more, err := next()
 		require.NoError(t, err)
-		last := uint(0)
-		for {
-			version, more, err := next()
-			require.NoError(t, err)
-			if !more {
-				break
-			}
-			last = version
+		if !more {
+			t.Fatalf("migration %d not found", previousMigrationVersion)
 		}
-		require.GreaterOrEqual(t, last, target, "migration %d must be applied", target)
+		if version == previousMigrationVersion {
+			break
+		}
 	}
-
-	// Migrate fully up first. The Stepper cannot stop at an intermediate
-	// version (it runs to completion and each run is one transaction), so
-	// fixtures are seeded post-schema and the explosion is exercised as
-	// DOWN (restore pre-explosion state) then UP (re-explode from it).
-	stepperUpToLatest(migrationVersion)
 
 	ctx := testutil.Context(t, testutil.WaitSuperLong)
 
@@ -3257,9 +3240,7 @@ func TestMigration000566ChatModelConfigOrgExplosion(t *testing.T) {
 	c3ID := uuid.New()   // soft-deleted, referenced in orgB only
 	c4ID := uuid.New()   // soft-deleted, unreferenced: never copied
 	c5ID := uuid.New()   // live plain config
-	// aclLateConfigID simulates a config written by an older binary during a
-	// rolling upgrade, without the everyone ACL entry.
-	aclLateConfigID := uuid.New()
+	emptyACLConfigID := uuid.New()
 	chatBID := uuid.New()  // chat in orgB pinned to live c1
 	chatB3ID := uuid.New() // chat in orgB pinned to deleted c3
 	chatDID := uuid.New()  // chat in soft-deleted orgD pinned to live c1
@@ -3323,7 +3304,7 @@ func TestMigration000566ChatModelConfigOrgExplosion(t *testing.T) {
 	insertConfig(c3ID, "gpt-4-legacy", false, true, everyoneACL)
 	insertConfig(c4ID, "gpt-4-ancient", false, true, everyoneACL)
 	insertConfig(c5ID, "gpt-5.2-nano", false, false, everyoneACL)
-	insertConfig(aclLateConfigID, "gpt-5.2-late", false, false, `{}`)
+	insertConfig(emptyACLConfigID, "gpt-5.2-empty-acl", false, false, `{}`)
 
 	// Chats: orgB pinned to live c1, orgB second chat pinned to deleted c3,
 	// soft-deleted orgD pinned to live c1.
@@ -3421,15 +3402,10 @@ func TestMigration000566ChatModelConfigOrgExplosion(t *testing.T) {
 		)
 	}
 
-	// The fixtures were seeded post-schema in pre-explosion shape
-	// (default-org configs, references pointing at originals). The Stepper
-	// cannot stop mid-way, so the explosion of the seeded data is driven by
-	// rewinding the version row to the predecessor and stepping to latest,
-	// which re-applies this migration's up over the seeded rows.
-	_, err := sqlDB.ExecContext(ctx, fmt.Sprintf(
-		"TRUNCATE schema_migrations; INSERT INTO schema_migrations (version, dirty) VALUES (%d, false)", migrationVersion-1))
+	upSQL, err := os.ReadFile("000566_chat_model_config_org_explosion.up.sql")
 	require.NoError(t, err)
-	stepperUpToLatest(migrationVersion)
+	_, err = sqlDB.ExecContext(ctx, string(upSQL))
+	require.NoError(t, err)
 
 	// copyID resolves the copy of orig in org by natural attributes (the
 	// migration persists no mapping; this is also what the down relies on).
@@ -3572,7 +3548,6 @@ func TestMigration000566ChatModelConfigOrgExplosion(t *testing.T) {
 		WHERE NOT co.is_default AND NOT co.deleted`).Scan(&dangling))
 	require.Zero(t, dangling, "no live-org chat references a default-org config")
 
-	// --- ACL re-key and backfill ---
 	// Each copy carries only its target organization's everyone entry.
 	for _, orgID := range []uuid.UUID{orgBID, orgCID} {
 		rows, err := sqlDB.QueryContext(ctx,
@@ -3588,14 +3563,6 @@ func TestMigration000566ChatModelConfigOrgExplosion(t *testing.T) {
 		require.NoError(t, rows.Err())
 		require.NoError(t, rows.Close())
 	}
-	// The pre-existing row with an empty group_acl was backfilled.
-	var aclRaw []byte
-	require.NoError(t, sqlDB.QueryRowContext(ctx,
-		"SELECT group_acl FROM chat_model_configs WHERE id = $1", aclLateConfigID).Scan(&aclRaw))
-	require.JSONEq(t, string(mustJSON(t, map[string]any{
-		defaultOrgID.String(): map[string]any{"permissions": []string{"read"}},
-	})), string(aclRaw), "row missing the everyone entry is backfilled")
-
 	// --- Threshold fan-out ---
 	// c1 keys fanned out to the orgB and orgC copies for both users (follows
 	// copies, not membership); the c3 key fanned out to the orgB copy only;
@@ -3665,12 +3632,7 @@ func TestMigration000566ChatModelConfigOrgExplosion(t *testing.T) {
 		user1ID).Scan(&overrideValue))
 	require.Equal(t, "chat_default", overrideValue, "non-threshold keys are untouched")
 
-	// --- Down round-trip on the exploded state. The framework's Stepper
-	// cannot commit after exactly one down step (its driver commits only
-	// when the stepper exhausts), so the down file is executed directly:
-	// migrations are plain SQL and this is the same text golang-migrate
-	// would run.
-	downSQL, err := fs.ReadFile(migrations.MigrationFS(), "000566_chat_model_config_org_explosion.down.sql")
+	downSQL, err := os.ReadFile("000566_chat_model_config_org_explosion.down.sql")
 	require.NoError(t, err)
 	_, err = sqlDB.ExecContext(ctx, string(downSQL))
 	require.NoError(t, err)
@@ -3703,22 +3665,15 @@ func TestMigration000566ChatModelConfigOrgExplosion(t *testing.T) {
 		"SELECT model_config_id FROM chat_debug_runs WHERE chat_id = $1", chatB3ID).Scan(&msgCfg))
 	require.Equal(t, c3ID, msgCfg, "down: orgB deleted-model debug run restored")
 
-	// Fanned-out threshold keys are gone; exactly the seeded valid key set
-	// remains. The two hostile keys (malformed/empty suffix) are pruned as
-	// dangling: they cannot name an existing config, and the down must not
-	// abort on their uuid cast.
+	// The down removes only fanned-out threshold keys. It preserves all
+	// seeded keys, including malformed and dangling keys.
 	var thresholdCount int
 	require.NoError(t, sqlDB.QueryRowContext(ctx,
 		"SELECT COUNT(*) FROM user_configs WHERE key LIKE 'chat_compaction_threshold_pct:%'").Scan(&thresholdCount))
-	require.Equal(t, 4, thresholdCount, "down: only the 4 seeded valid threshold keys remain")
+	require.Equal(t, 6, thresholdCount, "down: all 6 seeded threshold keys remain")
 
-	// Step forward again: the down executed outside the driver, so rewind
-	// the version row and re-apply the up. Shape re-asserted at count
-	// level.
-	_, err = sqlDB.ExecContext(ctx, fmt.Sprintf(
-		"TRUNCATE schema_migrations; INSERT INTO schema_migrations (version, dirty) VALUES (%d, false)", migrationVersion-1))
+	_, err = sqlDB.ExecContext(ctx, string(upSQL))
 	require.NoError(t, err)
-	stepperUpToLatest(migrationVersion)
 	assertCount(defaultOrgID, 6, "re-up: default org keeps its originals")
 	assertCount(orgBID, 5, "re-up: orgB copies recreated")
 	assertCount(orgCID, 4, "re-up: orgC copies recreated")

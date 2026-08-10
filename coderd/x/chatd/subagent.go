@@ -630,7 +630,7 @@ func (p *Server) listSpawnableModelConfigs(
 ) ([]map[string]any, error) {
 	//nolint:gocritic // Chatd needs its scoped config and user-data access here.
 	chatdCtx := dbauthz.AsChatd(ctx)
-	rows, err := enabledChatModelConfigsWithDefaultOrgFallback(chatdCtx, p.db, organizationID)
+	rows, err := p.db.GetEnabledChatModelConfigsByOrganization(chatdCtx, organizationID)
 	if err != nil {
 		return nil, xerrors.Errorf("get enabled chat model configs: %w", err)
 	}
@@ -1264,6 +1264,16 @@ func (p *Server) createChildSubagentChatWithOptions(
 	modelConfigID := parent.LastModelConfigID
 	if opts.modelConfigIDOverride != nil {
 		modelConfigID = *opts.modelConfigIDOverride
+	}
+	if modelConfigID != uuid.Nil && modelConfigID != parent.LastModelConfigID {
+		modelConfig, err := p.configCache.ModelConfigByID(ctx, modelConfigID)
+		if err != nil {
+			return database.Chat{}, xerrors.Errorf("get child model config: %w", err)
+		}
+		if modelConfig.OrganizationID != parent.OrganizationID {
+			modelConfigID = parent.LastModelConfigID
+			opts.reasoningEffortOverride = nil
+		}
 	}
 	if modelConfigID == uuid.Nil {
 		return database.Chat{}, xerrors.New("model config is required")

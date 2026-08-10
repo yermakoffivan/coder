@@ -89,6 +89,9 @@ func (p *Server) resolveCompactionOverrideConfig(
 	if err != nil || !overrideSet {
 		return nil, err
 	}
+	if modelConfig.OrganizationID != chat.OrganizationID {
+		return nil, err
+	}
 	// Already validated by the shared resolver; failure is unreachable.
 	resolvedProvider, resolvedModel, err := chatprovider.ResolveModelWithProviderHint(
 		modelConfig.Model,
