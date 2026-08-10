@@ -658,6 +658,15 @@ func (api *API) updateMCPServerConfig(rw http.ResponseWriter, r *http.Request) {
 
 	var updated database.MCPServerConfig
 	err := api.Database.InTx(func(tx database.Store) error {
+		// Re-fetch on the transaction handle so the merge base is the
+		// row this update replaces; merging onto the stale middleware
+		// snapshot would revert a concurrent update's omitted fields.
+		current, err := tx.GetMCPServerConfigByID(ctx, existing.ID)
+		if err != nil {
+			return err
+		}
+		existing = current
+
 		displayName := existing.DisplayName
 		if req.DisplayName != nil {
 			displayName = strings.TrimSpace(*req.DisplayName)
