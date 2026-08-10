@@ -267,6 +267,7 @@ func MinimalUserFromVisibleUser(user database.VisibleUser) codersdk.MinimalUser 
 		ID:        user.ID,
 		Username:  user.Username,
 		Name:      user.Name,
+		Email:     user.Email,
 		AvatarURL: user.AvatarURL,
 	}
 }
@@ -1100,6 +1101,7 @@ func AIBridgeSession(row database.ListAIBridgeSessionsRow) codersdk.AIBridgeSess
 			Username:  row.UserUsername,
 			Name:      row.UserName,
 			AvatarURL: row.UserAvatarUrl,
+			Email:     row.UserEmail,
 		}),
 		Providers:    row.Providers,
 		Models:       row.Models,
@@ -1225,6 +1227,7 @@ func AIBridgeSessionThreads(p AIBridgeSessionThreadsParams) codersdk.AIBridgeSes
 			Username:  session.UserUsername,
 			Name:      session.UserName,
 			AvatarURL: session.UserAvatarUrl,
+			Email:     session.UserEmail,
 		}),
 		Providers:     session.Providers,
 		Models:        session.Models,

@@ -1047,6 +1047,7 @@ func (q *sqlQuerier) ListAuthorizedAIBridgeSessions(ctx context.Context, arg Lis
 			&i.UserUsername,
 			&i.UserName,
 			&i.UserAvatarUrl,
+			&i.UserEmail,
 			pq.Array(&i.Providers),
 			pq.Array(&i.Models),
 			&i.Client,
