@@ -106,6 +106,22 @@ describe("MCP selection persistence", () => {
 			expect(localStorage.getItem("agents.selected-mcp-server-ids")).toBeNull();
 		});
 
+		it("does not migrate while the server list is empty", () => {
+			localStorage.setItem(
+				"agents.selected-mcp-server-ids",
+				JSON.stringify(["s3"]),
+			);
+
+			migrateLegacyMCPSelection(organizationId, []);
+
+			expect(
+				localStorage.getItem(mcpSelectionStorageKey(organizationId)),
+			).toBeNull();
+			expect(localStorage.getItem("agents.selected-mcp-server-ids")).toBe(
+				JSON.stringify(["s3"]),
+			);
+		});
+
 		it("migrates an empty legacy selection without enabling default-on servers", () => {
 			localStorage.setItem("agents.selected-mcp-server-ids", "[]");
 
