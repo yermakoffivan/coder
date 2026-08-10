@@ -35,19 +35,10 @@ type stubChatConfigStore struct {
 
 	enabledProvidersCalls   atomic.Int32
 	modelConfigByIDCalls    atomic.Int32
-	defaultModelConfigCalls *syncmap.Map[uuid.UUID, *atomic.Int32]
+	defaultModelConfigCalls syncmap.Map[uuid.UUID, *atomic.Int32]
 	defaultOrganizationCall atomic.Int32
 	userPromptCalls         atomic.Int32
 	advisorConfigCalls      atomic.Int32
-
-	defaultModelConfigCallsInit sync.Once
-}
-
-func (s *stubChatConfigStore) defaultModelConfigCallMap() *syncmap.Map[uuid.UUID, *atomic.Int32] {
-	s.defaultModelConfigCallsInit.Do(func() {
-		s.defaultModelConfigCalls = syncmap.New[uuid.UUID, *atomic.Int32]()
-	})
-	return s.defaultModelConfigCalls
 }
 
 func (s *stubChatConfigStore) GetAIProviders(ctx context.Context, _ database.GetAIProvidersParams) ([]database.AIProvider, error) {
@@ -67,7 +58,7 @@ func (s *stubChatConfigStore) GetChatModelConfigByID(ctx context.Context, id uui
 }
 
 func (s *stubChatConfigStore) GetDefaultChatModelConfig(ctx context.Context, orgID uuid.UUID) (database.ChatModelConfig, error) {
-	counter, _ := s.defaultModelConfigCallMap().LoadOrStore(orgID, &atomic.Int32{})
+	counter, _ := s.defaultModelConfigCalls.LoadOrStore(orgID, &atomic.Int32{})
 	counter.Add(1)
 	if s.getDefaultChatModelConfig == nil {
 		panic("unexpected GetDefaultChatModelConfig call")
@@ -78,18 +69,16 @@ func (s *stubChatConfigStore) GetDefaultChatModelConfig(ctx context.Context, org
 // defaultModelConfigCallCount returns the number of default-config
 // fetches for the given org (0 when the org was never queried).
 func (s *stubChatConfigStore) defaultModelConfigCallCount(orgID uuid.UUID) int32 {
-	counter, ok := s.defaultModelConfigCallMap().Load(orgID)
+	counter, ok := s.defaultModelConfigCalls.Load(orgID)
 	if !ok {
 		return 0
 	}
 	return counter.Load()
 }
 
-// totalDefaultModelConfigCalls returns the number of default-config
-// fetches across all orgs.
 func (s *stubChatConfigStore) totalDefaultModelConfigCalls() int32 {
 	var total int32
-	s.defaultModelConfigCallMap().Range(func(_ uuid.UUID, counter *atomic.Int32) bool {
+	s.defaultModelConfigCalls.Range(func(_ uuid.UUID, counter *atomic.Int32) bool {
 		total += counter.Load()
 		return true
 	})
@@ -211,7 +200,7 @@ func TestConfigCache_ModelConfigByID_CacheHit(t *testing.T) {
 	require.Equal(t, int32(1), store.modelConfigByIDCalls.Load())
 }
 
-func TestConfigCache_ModelConfigByID_ClonesOptionsForCache(t *testing.T) {
+func TestConfigCache_ModelConfigByID_ClonesMutableFieldsForCache(t *testing.T) {
 	t.Parallel()
 
 	ctx := testutil.Context(t, testutil.WaitShort)
@@ -220,6 +209,8 @@ func TestConfigCache_ModelConfigByID_ClonesOptionsForCache(t *testing.T) {
 	const options = `{"temperature":0.1}`
 	config := testChatModelConfig(configID, "model-a")
 	config.Options = []byte(options)
+	config.GroupACL = database.ChatACL{"group": {}}
+	config.UserACL = database.ChatACL{"user": {}}
 	store := &stubChatConfigStore{
 		getChatModelConfigByID: func(context.Context, uuid.UUID) (database.ChatModelConfig, error) {
 			return config, nil
@@ -231,17 +222,25 @@ func TestConfigCache_ModelConfigByID_ClonesOptionsForCache(t *testing.T) {
 	first, err := cache.ModelConfigByID(ctx, configID)
 	require.NoError(t, err)
 	first.Options[0] = 'x' // mutate singleflight return
+	delete(first.GroupACL, "group")
+	first.UserACL["first-mutation"] = database.ChatACLEntry{}
 
 	// Second call is a cache hit.
 	second, err := cache.ModelConfigByID(ctx, configID)
 	require.NoError(t, err)
 	require.Equal(t, options, string(second.Options))
+	require.Equal(t, config.GroupACL, second.GroupACL)
+	require.Equal(t, config.UserACL, second.UserACL)
 	second.Options[0] = 'y' // mutate cache-hit return
+	second.GroupACL["second-mutation"] = database.ChatACLEntry{}
+	delete(second.UserACL, "user")
 
-	// Third call is another cache hit — must be unaffected.
+	// Third call is another cache hit. It must be unaffected.
 	third, err := cache.ModelConfigByID(ctx, configID)
 	require.NoError(t, err)
 	require.Equal(t, options, string(third.Options))
+	require.Equal(t, config.GroupACL, third.GroupACL)
+	require.Equal(t, config.UserACL, third.UserACL)
 }
 
 func TestConfigCache_ModelConfigByID_NotFound(t *testing.T) {

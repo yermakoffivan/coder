@@ -4859,6 +4859,65 @@ func TestListAgents(t *testing.T) {
 	})
 }
 
+type enabledChatModelConfigsReadSkewStore struct {
+	database.Store
+	organizationID uuid.UUID
+	config         database.ChatModelConfig
+	listCalls      atomic.Int32
+}
+
+func (s *enabledChatModelConfigsReadSkewStore) GetEnabledChatModelConfigsByOrganization(
+	_ context.Context,
+	organizationID uuid.UUID,
+) ([]database.GetEnabledChatModelConfigsByOrganizationRow, error) {
+	if organizationID != s.organizationID {
+		return nil, sql.ErrNoRows
+	}
+	if s.listCalls.Add(1) == 1 {
+		return nil, nil
+	}
+	return []database.GetEnabledChatModelConfigsByOrganizationRow{{ChatModelConfig: s.config}}, nil
+}
+
+func (s *enabledChatModelConfigsReadSkewStore) GetDefaultChatModelConfig(
+	_ context.Context,
+	organizationID uuid.UUID,
+) (database.ChatModelConfig, error) {
+	if organizationID != s.organizationID {
+		return database.ChatModelConfig{}, sql.ErrNoRows
+	}
+	return s.config, nil
+}
+
+type enabledChatModelConfigsEmptyDefaultOrgStore struct {
+	database.Store
+	organizationID uuid.UUID
+}
+
+func (s *enabledChatModelConfigsEmptyDefaultOrgStore) GetEnabledChatModelConfigsByOrganization(
+	_ context.Context,
+	organizationID uuid.UUID,
+) ([]database.GetEnabledChatModelConfigsByOrganizationRow, error) {
+	if organizationID != s.organizationID {
+		return nil, xerrors.Errorf("unexpected organization %q", organizationID)
+	}
+	return nil, nil
+}
+
+func (s *enabledChatModelConfigsEmptyDefaultOrgStore) GetDefaultChatModelConfig(
+	_ context.Context,
+	organizationID uuid.UUID,
+) (database.ChatModelConfig, error) {
+	if organizationID != s.organizationID {
+		return database.ChatModelConfig{}, xerrors.Errorf("unexpected organization %q", organizationID)
+	}
+	return database.ChatModelConfig{}, sql.ErrNoRows
+}
+
+func (s *enabledChatModelConfigsEmptyDefaultOrgStore) GetDefaultOrganization(context.Context) (database.Organization, error) {
+	return database.Organization{ID: s.organizationID}, nil
+}
+
 func TestEnabledChatModelConfigsWithDefaultOrgFallback(t *testing.T) {
 	t.Parallel()
 
@@ -4888,11 +4947,7 @@ func TestEnabledChatModelConfigsWithDefaultOrgFallback(t *testing.T) {
 		// carries seeded configs in previously created orgs.
 		emptyOrg := dbgen.Organization(t, db, database.Organization{})
 		ctx := testutil.Context(t, testutil.WaitShort)
-		rows, err := db.GetEnabledChatModelConfigsByOrganization(ctx, emptyOrg.ID)
-		require.NoError(t, err)
-		require.Empty(t, rows)
-
-		rows, err = enabledChatModelConfigsWithDefaultOrgFallback(ctx, db, emptyOrg.ID, rows)
+		rows, err := enabledChatModelConfigsWithDefaultOrgFallback(ctx, db, emptyOrg.ID)
 		require.NoError(t, err)
 		require.NotEmpty(t, rows)
 
@@ -4900,6 +4955,27 @@ func TestEnabledChatModelConfigsWithDefaultOrgFallback(t *testing.T) {
 			return row.ChatModelConfig.ID == defaultOrgConfig.ID
 		})
 		require.True(t, found, "default org list should include its config")
+	})
+
+	t.Run("ReFetchesWhenDefaultAppearsAfterEmptyList", func(t *testing.T) {
+		t.Parallel()
+
+		organizationID := uuid.New()
+		config := database.ChatModelConfig{
+			ID:             uuid.New(),
+			OrganizationID: organizationID,
+			IsDefault:      true,
+		}
+		store := &enabledChatModelConfigsReadSkewStore{
+			organizationID: organizationID,
+			config:         config,
+		}
+
+		rows, err := enabledChatModelConfigsWithDefaultOrgFallback(t.Context(), store, organizationID)
+		require.NoError(t, err)
+		require.Len(t, rows, 1)
+		require.Equal(t, config.ID, rows[0].ChatModelConfig.ID)
+		require.EqualValues(t, 2, store.listCalls.Load())
 	})
 
 	t.Run("OrgListPresentNeverFallsBack", func(t *testing.T) {
@@ -4914,11 +4990,7 @@ func TestEnabledChatModelConfigsWithDefaultOrgFallback(t *testing.T) {
 			OrganizationID: otherOrg.ID,
 		})
 
-		rows, err := db.GetEnabledChatModelConfigsByOrganization(ctx, otherOrg.ID)
-		require.NoError(t, err)
-		require.Len(t, rows, 1)
-
-		rows, err = enabledChatModelConfigsWithDefaultOrgFallback(ctx, db, otherOrg.ID, rows)
+		rows, err := enabledChatModelConfigsWithDefaultOrgFallback(ctx, db, otherOrg.ID)
 		require.NoError(t, err)
 		require.Len(t, rows, 1)
 		require.Equal(t, ownConfig.ID, rows[0].ChatModelConfig.ID)
@@ -4927,12 +4999,11 @@ func TestEnabledChatModelConfigsWithDefaultOrgFallback(t *testing.T) {
 	t.Run("DefaultOrgNeverFallsBack", func(t *testing.T) {
 		t.Parallel()
 
-		ctx := testutil.Context(t, testutil.WaitShort)
-
-		// A miss inside the default org must not recurse into the
-		// fallback: the empty result stands.
-		rows := []database.GetEnabledChatModelConfigsByOrganizationRow{}
-		got, err := enabledChatModelConfigsWithDefaultOrgFallback(ctx, db, defaultOrg.ID, rows)
+		store := &enabledChatModelConfigsEmptyDefaultOrgStore{
+			Store:          db,
+			organizationID: defaultOrg.ID,
+		}
+		got, err := enabledChatModelConfigsWithDefaultOrgFallback(t.Context(), store, defaultOrg.ID)
 		require.NoError(t, err)
 		require.Empty(t, got)
 	})
@@ -4955,11 +5026,7 @@ func TestEnabledChatModelConfigsWithDefaultOrgFallback(t *testing.T) {
 			params.Enabled = false
 		})
 
-		rows, err := db.GetEnabledChatModelConfigsByOrganization(ctx, disabledOrg.ID)
-		require.NoError(t, err)
-		require.Empty(t, rows)
-
-		got, err := enabledChatModelConfigsWithDefaultOrgFallback(ctx, db, disabledOrg.ID, rows)
+		got, err := enabledChatModelConfigsWithDefaultOrgFallback(ctx, db, disabledOrg.ID)
 		require.NoError(t, err)
 		require.Empty(t, got)
 	})
@@ -4984,11 +5051,7 @@ func TestEnabledChatModelConfigsWithDefaultOrgFallback(t *testing.T) {
 			IsDefault:      true,
 		})
 
-		rows, err := db.GetEnabledChatModelConfigsByOrganization(ctx, disabledProviderOrg.ID)
-		require.NoError(t, err)
-		require.Empty(t, rows)
-
-		got, err := enabledChatModelConfigsWithDefaultOrgFallback(ctx, db, disabledProviderOrg.ID, rows)
+		got, err := enabledChatModelConfigsWithDefaultOrgFallback(ctx, db, disabledProviderOrg.ID)
 		require.NoError(t, err)
 		require.Empty(t, got)
 	})

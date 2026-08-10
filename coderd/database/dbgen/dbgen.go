@@ -186,16 +186,11 @@ func ChatModelConfig(t testing.TB, db database.Store, seed database.ChatModelCon
 	}
 	groupACL := seed.GroupACL
 	if groupACL == nil {
-		groupACL = database.ChatACL{}
+		groupACL = database.ChatACL{
+			organizationID.String(): {Permissions: []policy.Action{policy.ActionRead}},
+		}
 	}
-	groupACLRaw, err := json.Marshal(groupACL)
-	require.NoError(t, err, "marshal group ACL")
 	userACL := seed.UserACL
-	if userACL == nil {
-		userACL = database.ChatACL{}
-	}
-	userACLRaw, err := json.Marshal(userACL)
-	require.NoError(t, err, "marshal user ACL")
 	params := database.InsertChatModelConfigParams{
 		Model:                takeFirst(seed.Model, "gpt-4o-mini"),
 		DisplayName:          takeFirst(seed.DisplayName, "Test Model"),
@@ -208,8 +203,8 @@ func ChatModelConfig(t testing.TB, db database.Store, seed database.ChatModelCon
 		Options:              takeFirstSlice(seed.Options, json.RawMessage(`{}`)),
 		AIProviderID:         aiProviderID,
 		OrganizationID:       organizationID,
-		GroupACL:             groupACLRaw,
-		UserACL:              userACLRaw,
+		GroupACL:             groupACL,
+		UserACL:              userACL,
 	}
 	for _, fn := range munge {
 		fn(&params)

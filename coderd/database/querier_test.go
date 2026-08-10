@@ -12319,10 +12319,10 @@ func insertChatModelConfigForTest(
 		params.OrganizationID = defaultOrg.ID
 	}
 	if params.GroupACL == nil {
-		params.GroupACL = json.RawMessage(`{}`)
+		params.GroupACL = database.ChatACL{}
 	}
 	if params.UserACL == nil {
-		params.UserACL = json.RawMessage(`{}`)
+		params.UserACL = database.ChatACL{}
 	}
 	return store.InsertChatModelConfig(ctx, params)
 }
@@ -17543,8 +17543,8 @@ func TestGetChatsFilter(t *testing.T) {
 		CompressionThreshold: 80,
 		Options:              json.RawMessage(`{}`),
 		OrganizationID:       org.ID,
-		GroupACL:             json.RawMessage(`{}`),
-		UserACL:              json.RawMessage(`{}`),
+		GroupACL:             database.ChatACL{},
+		UserACL:              database.ChatACL{},
 	})
 	require.NoError(t, err)
 
@@ -17838,8 +17838,8 @@ func TestGetChatsSearch(t *testing.T) {
 		CompressionThreshold: 80,
 		Options:              json.RawMessage(`{}`),
 		OrganizationID:       org.ID,
-		GroupACL:             json.RawMessage(`{}`),
-		UserACL:              json.RawMessage(`{}`),
+		GroupACL:             database.ChatACL{},
+		UserACL:              database.ChatACL{},
 	})
 	require.NoError(t, err)
 

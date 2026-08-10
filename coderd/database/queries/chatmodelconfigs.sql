@@ -114,8 +114,8 @@ INSERT INTO chat_model_configs (
     @options::jsonb,
     sqlc.narg('ai_provider_id')::uuid,
     @organization_id::uuid,
-    @group_acl::jsonb,
-    @user_acl::jsonb
+    @group_acl,
+    @user_acl
 )
 RETURNING
     *;

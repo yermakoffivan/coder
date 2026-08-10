@@ -7540,6 +7540,10 @@ func TestAsChatd(t *testing.T) {
 		// User read_personal (needed for GetUserChatCustomPrompt).
 		err = auth.Authorize(ctx, actor, policy.ActionReadPersonal, rbac.ResourceUser)
 		require.NoError(t, err, "user read_personal should be allowed")
+
+		// Organization reads support the pre-cutover default-org fallback.
+		err = auth.Authorize(ctx, actor, policy.ActionRead, rbac.ResourceOrganization)
+		require.NoError(t, err, "organization read should be allowed")
 	})
 
 	t.Run("DeniedActions", func(t *testing.T) {

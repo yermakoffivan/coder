@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 	"sync"
 	"time"
@@ -49,10 +50,12 @@ type modelConfigSnapshot struct {
 	generation uint64
 }
 
-// cloneModelConfig returns a shallow copy of cfg with Options
-// deep-cloned so the cache owns its own backing array.
+// cloneModelConfig returns a shallow copy of cfg with mutable fields
+// cloned so the cache owns their backing storage.
 func cloneModelConfig(cfg database.ChatModelConfig) database.ChatModelConfig {
 	cfg.Options = slices.Clone(cfg.Options)
+	cfg.GroupACL = maps.Clone(cfg.GroupACL)
+	cfg.UserACL = maps.Clone(cfg.UserACL)
 	return cfg
 }
 
@@ -286,8 +289,8 @@ func (c *chatConfigCache) storeModelConfig(snap modelConfigSnapshot, config data
 // organization. Until the org-scoping cutover, an org without its own
 // default falls back to the default org's config.
 // TODO(mafredri): remove after CODAGT-709 M3 (org-scoping cutover);
-// orgs resolve strictly within their own configs after the explosion
-// migration.
+// orgs resolve strictly within their own configs after the org-scoping
+// cutover.
 func (c *chatConfigCache) DefaultModelConfig(ctx context.Context, orgID uuid.UUID) (database.ChatModelConfig, error) {
 	if config, ok := c.cachedDefaultModelConfig(orgID); ok {
 		return config, nil

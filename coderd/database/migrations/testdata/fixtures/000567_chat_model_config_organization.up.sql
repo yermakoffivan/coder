@@ -1,4 +1,4 @@
--- Fixture for 000565 (org-scope chat model configs). Fixtures apply at
+-- Fixture for 000567 (org-scope chat model configs). Fixtures apply at
 -- the post-migration schema (migrate_test.go applies fixture N right
 -- after migration N runs), so rows carry the final shape: an explicit
 -- organization_id and the seeded everyone-in-org group_acl entry (the

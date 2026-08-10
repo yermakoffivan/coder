@@ -795,9 +795,9 @@ var (
 					rbac.ResourceWorkspace.Type:        {policy.ActionRead, policy.ActionUpdate},
 					rbac.ResourceDeploymentConfig.Type: {policy.ActionRead},
 					rbac.ResourceUser.Type:             {policy.ActionReadPersonal},
-					// Org-scoped resolution paths read the default
-					// organization to apply the pre-cutover
-					// default-org fallback (removed in M3).
+					// TODO(mafredri): remove this organization read after CODAGT-709 M3
+					// (org-scoping cutover). exp_chats and chatd use it for the
+					// pre-cutover default-org fallback.
 					rbac.ResourceOrganization.Type: {policy.ActionRead},
 				}),
 				User:    []rbac.Permission{},
@@ -3745,6 +3745,7 @@ func (q *querier) GetEnabledChatModelConfigs(ctx context.Context) ([]database.Ge
 }
 
 func (q *querier) GetEnabledChatModelConfigsByOrganization(ctx context.Context, organizationID uuid.UUID) ([]database.GetEnabledChatModelConfigsByOrganizationRow, error) {
+	// TODO(CODAGT-161): authorize against an organization-scoped chat model config resource.
 	if err := q.authorizeContext(ctx, policy.ActionRead, rbac.ResourceDeploymentConfig); err != nil {
 		return nil, err
 	}

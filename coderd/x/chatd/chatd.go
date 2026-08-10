@@ -1745,12 +1745,60 @@ func defaultChatModelConfigForOrg(
 	}
 	defaultOrg, err := store.GetDefaultOrganization(ctx)
 	if err != nil {
-		return database.ChatModelConfig{}, err
+		return database.ChatModelConfig{}, xerrors.Errorf("get default organization: %w", err)
 	}
 	if defaultOrg.ID == organizationID {
 		return database.ChatModelConfig{}, sql.ErrNoRows
 	}
 	return store.GetDefaultChatModelConfig(ctx, defaultOrg.ID)
+}
+
+// enabledChatModelConfigsWithDefaultOrgFallback returns the organization's
+// enabled configs. It uses the default org's configs when the organization
+// owns no configs, which preserves the pre-org-scoping behavior. The default
+// org itself never falls back.
+//
+// An empty initial result does not prove the organization owns no configs. Its
+// configs can all be disabled or use disabled providers. The resolved default
+// config is the ownership marker because every write path preserves one default
+// in each organization that owns configs.
+// TODO(mafredri): remove after CODAGT-709 M3 (org-scoping cutover);
+// organizations list strictly within their own configs.
+func enabledChatModelConfigsWithDefaultOrgFallback(
+	ctx context.Context,
+	store database.Store,
+	organizationID uuid.UUID,
+) ([]database.GetEnabledChatModelConfigsByOrganizationRow, error) {
+	rows, err := store.GetEnabledChatModelConfigsByOrganization(ctx, organizationID)
+	if err != nil {
+		return nil, err
+	}
+	if len(rows) > 0 {
+		return rows, nil
+	}
+
+	defaultConfig, err := defaultChatModelConfigForOrg(ctx, store, organizationID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return rows, nil
+		}
+		return nil, xerrors.Errorf("resolve default chat model config: %w", err)
+	}
+	if defaultConfig.OrganizationID == organizationID {
+		// The default can appear after the initial list read. Re-fetch the
+		// organization's enabled configs to avoid returning a stale empty list.
+		rows, err = store.GetEnabledChatModelConfigsByOrganization(ctx, organizationID)
+		if err != nil {
+			return nil, xerrors.Errorf("re-fetch organization enabled chat model configs: %w", err)
+		}
+		return rows, nil
+	}
+
+	fallbackRows, err := store.GetEnabledChatModelConfigsByOrganization(ctx, defaultConfig.OrganizationID)
+	if err != nil {
+		return nil, xerrors.Errorf("get default org enabled chat model configs: %w", err)
+	}
+	return fallbackRows, nil
 }
 
 // EditMessage replaces an earlier user message and discards the
@@ -2835,10 +2883,7 @@ func (p *Server) resolveManualTitleModel(
 		return overrideModel, overrideConfig, nil
 	}
 
-	configs, err := store.GetEnabledChatModelConfigsByOrganization(ctx, chat.OrganizationID)
-	if err == nil {
-		configs, err = enabledChatModelConfigsWithDefaultOrgFallback(ctx, store, chat.OrganizationID, configs)
-	}
+	configs, err := enabledChatModelConfigsWithDefaultOrgFallback(ctx, store, chat.OrganizationID)
 	if err != nil {
 		p.logger.Debug(ctx, "failed to list manual title model configs",
 			slog.F("chat_id", chat.ID),

@@ -4517,6 +4517,60 @@ func TestUpdateChatModelConfig(t *testing.T) {
 		require.Len(t, configs, 1)
 	})
 
+	t.Run("SoleConfigRemainsDefaultWhenDemoted", func(t *testing.T) {
+		t.Parallel()
+
+		ctx := testutil.Context(t, testutil.WaitLong)
+		client, db := newChatClientWithDatabase(t)
+		firstUser := coderdtest.CreateFirstUser(t, client.Client)
+		modelConfig := createChatModelConfig(t, client)
+
+		updated, err := client.UpdateChatModelConfig(ctx, modelConfig.ID, codersdk.UpdateChatModelConfigRequest{
+			IsDefault: ptr.Ref(false),
+		})
+		require.NoError(t, err)
+		require.True(t, updated.IsDefault)
+
+		defaultConfig, err := db.GetDefaultChatModelConfig(dbauthz.AsSystemRestricted(ctx), firstUser.OrganizationID)
+		require.NoError(t, err)
+		require.Equal(t, modelConfig.ID, defaultConfig.ID)
+	})
+
+	t.Run("PromotionLeavesOtherOrganizationDefaultUnchanged", func(t *testing.T) {
+		t.Parallel()
+
+		ctx := testutil.Context(t, testutil.WaitLong)
+		client, db := newChatClientWithDatabase(t)
+		firstUser := coderdtest.CreateFirstUser(t, client.Client)
+		defaultConfig := createChatModelConfig(t, client)
+		candidateConfig := createAdditionalChatModelConfig(
+			t,
+			client,
+			coderdtest.TestChatProviderOpenAICompat,
+			"promotion-candidate",
+		)
+		otherOrg := dbgen.Organization(t, db, database.Organization{})
+		otherDefault := dbgen.ChatModelConfig(t, db, database.ChatModelConfig{
+			Model:          "other-org-default-" + uuid.NewString(),
+			AIProviderID:   uuid.NullUUID{UUID: defaultConfig.AIProviderID, Valid: true},
+			OrganizationID: otherOrg.ID,
+			IsDefault:      true,
+		})
+
+		updated, err := client.UpdateChatModelConfig(ctx, candidateConfig.ID, codersdk.UpdateChatModelConfigRequest{
+			IsDefault: ptr.Ref(true),
+		})
+		require.NoError(t, err)
+		require.True(t, updated.IsDefault)
+
+		orgDefault, err := db.GetDefaultChatModelConfig(dbauthz.AsSystemRestricted(ctx), firstUser.OrganizationID)
+		require.NoError(t, err)
+		require.Equal(t, candidateConfig.ID, orgDefault.ID)
+		unchangedOtherDefault, err := db.GetDefaultChatModelConfig(dbauthz.AsSystemRestricted(ctx), otherOrg.ID)
+		require.NoError(t, err)
+		require.Equal(t, otherDefault.ID, unchangedOtherDefault.ID)
+	})
+
 	t.Run("UnchangedProviderWithoutAIProviderID", func(t *testing.T) {
 		t.Parallel()
 
@@ -5114,6 +5168,38 @@ func TestDeleteChatModelConfig(t *testing.T) {
 		for _, config := range configs {
 			require.NotEqual(t, modelConfig.ID, config.ID)
 		}
+	})
+
+	t.Run("DeletionLeavesOtherOrganizationDefaultUnchanged", func(t *testing.T) {
+		t.Parallel()
+
+		ctx := testutil.Context(t, testutil.WaitLong)
+		client, db := newChatClientWithDatabase(t)
+		firstUser := coderdtest.CreateFirstUser(t, client.Client)
+		defaultConfig := createChatModelConfig(t, client)
+		candidateConfig := createAdditionalChatModelConfig(
+			t,
+			client,
+			coderdtest.TestChatProviderOpenAICompat,
+			"delete-candidate",
+		)
+		otherOrg := dbgen.Organization(t, db, database.Organization{})
+		otherDefault := dbgen.ChatModelConfig(t, db, database.ChatModelConfig{
+			Model:          "other-org-default-" + uuid.NewString(),
+			AIProviderID:   uuid.NullUUID{UUID: defaultConfig.AIProviderID, Valid: true},
+			OrganizationID: otherOrg.ID,
+			IsDefault:      true,
+		})
+
+		err := client.DeleteChatModelConfig(ctx, defaultConfig.ID)
+		require.NoError(t, err)
+
+		orgDefault, err := db.GetDefaultChatModelConfig(dbauthz.AsSystemRestricted(ctx), firstUser.OrganizationID)
+		require.NoError(t, err)
+		require.Equal(t, candidateConfig.ID, orgDefault.ID)
+		unchangedOtherDefault, err := db.GetDefaultChatModelConfig(dbauthz.AsSystemRestricted(ctx), otherOrg.ID)
+		require.NoError(t, err)
+		require.Equal(t, otherDefault.ID, unchangedOtherDefault.ID)
 	})
 
 	// Deleting the default must not promote a config whose provider is

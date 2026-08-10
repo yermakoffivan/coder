@@ -630,11 +630,7 @@ func (p *Server) listSpawnableModelConfigs(
 ) ([]map[string]any, error) {
 	//nolint:gocritic // Chatd needs its scoped config and user-data access here.
 	chatdCtx := dbauthz.AsChatd(ctx)
-	rows, err := p.db.GetEnabledChatModelConfigsByOrganization(chatdCtx, organizationID)
-	if err != nil {
-		return nil, xerrors.Errorf("get enabled chat model configs: %w", err)
-	}
-	rows, err = enabledChatModelConfigsWithDefaultOrgFallback(chatdCtx, p.db, organizationID, rows)
+	rows, err := enabledChatModelConfigsWithDefaultOrgFallback(chatdCtx, p.db, organizationID)
 	if err != nil {
 		return nil, xerrors.Errorf("get enabled chat model configs: %w", err)
 	}
@@ -686,47 +682,6 @@ func (p *Server) listSpawnableModelConfigs(
 		models = append(models, entry)
 	}
 	return models, nil
-}
-
-// enabledChatModelConfigsWithDefaultOrgFallback substitutes the
-// default org's enabled chat model configs when the chat's org owns
-// none of its own, preserving the pre-org-scoping behavior where
-// every chat saw the deployment-wide list. The default org itself
-// never falls back.
-//
-// An empty rows slice does not prove the org owns no configs: it also
-// results from an org whose configs are all disabled, or all sit under
-// disabled providers. Those orgs keep their empty list rather than
-// borrowing another org's models, so ownership is decided by whether
-// the org owns the resolved default config. Every write path promotes
-// a default within the org it writes to, so an org owns configs
-// exactly when it owns a default.
-// TODO(mafredri): remove after CODAGT-709 M3 (org-scoping cutover);
-// orgs list strictly within their own configs.
-func enabledChatModelConfigsWithDefaultOrgFallback(
-	ctx context.Context,
-	db database.Store,
-	organizationID uuid.UUID,
-	rows []database.GetEnabledChatModelConfigsByOrganizationRow,
-) ([]database.GetEnabledChatModelConfigsByOrganizationRow, error) {
-	if len(rows) > 0 {
-		return rows, nil
-	}
-	defaultConfig, err := defaultChatModelConfigForOrg(ctx, db, organizationID)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return rows, nil
-		}
-		return nil, xerrors.Errorf("resolve default chat model config: %w", err)
-	}
-	if defaultConfig.OrganizationID == organizationID {
-		return rows, nil
-	}
-	fallbackRows, err := db.GetEnabledChatModelConfigsByOrganization(ctx, defaultConfig.OrganizationID)
-	if err != nil {
-		return nil, xerrors.Errorf("get default org enabled chat model configs: %w", err)
-	}
-	return fallbackRows, nil
 }
 
 func (p *Server) subagentTools(

@@ -6434,8 +6434,8 @@ INSERT INTO chat_model_configs (
     $9::jsonb,
     $10::uuid,
     $11::uuid,
-    $12::jsonb,
-    $13::jsonb
+    $12,
+    $13
 )
 RETURNING
     id, model, display_name, created_by, updated_by, enabled, is_default, deleted, deleted_at, created_at, updated_at, context_limit, compression_threshold, options, ai_provider_id, organization_id, group_acl, user_acl
@@ -6453,8 +6453,8 @@ type InsertChatModelConfigParams struct {
 	Options              json.RawMessage `db:"options" json:"options"`
 	AIProviderID         uuid.NullUUID   `db:"ai_provider_id" json:"ai_provider_id"`
 	OrganizationID       uuid.UUID       `db:"organization_id" json:"organization_id"`
-	GroupACL             json.RawMessage `db:"group_acl" json:"group_acl"`
-	UserACL              json.RawMessage `db:"user_acl" json:"user_acl"`
+	GroupACL             ChatACL         `db:"group_acl" json:"group_acl"`
+	UserACL              ChatACL         `db:"user_acl" json:"user_acl"`
 }
 
 func (q *sqlQuerier) InsertChatModelConfig(ctx context.Context, arg InsertChatModelConfigParams) (ChatModelConfig, error) {

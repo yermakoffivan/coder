@@ -4435,12 +4435,10 @@ func (api *API) resolveCreateChatModelConfigID(
 func (api *API) defaultCreateChatModelConfigID(
 	ctx context.Context,
 ) (uuid.UUID, int, *codersdk.Response) {
-	// Chat model configs are org-scoped, but the pre-cutover request path
-	// carries no organization: every config lives in the default org, so
-	// resolve the default there. The default-org ID lookup is an internal
-	// resolution step, not user-readable data; a non-default-org member
-	// cannot read the organization object but must still resolve the
-	// deployment default.
+	// The request carries a validated organization, but the pre-cutover
+	// handler deliberately resolves the deployment-default model until the
+	// API layer completes the organization-scoping cutover. The default-org
+	// lookup is internal and does not expose organization data to the user.
 	//nolint:gocritic // Internal default-org resolution, scoped to this call.
 	defaultOrg, err := api.Database.GetDefaultOrganization(dbauthz.AsChatd(ctx))
 	if err != nil {
@@ -6511,6 +6509,7 @@ func (api *API) inChatModelConfigWriteTx(
 	fn func(tx database.Store) error,
 ) error {
 	return api.Database.InTx(func(tx database.Store) error {
+		// organization_id cannot change because this lock key can come from a pre-lock read.
 		lockID := database.GenLockID("chat_model_config_writes:" + organizationID.String())
 		if err := tx.AcquireLock(ctx, lockID); err != nil {
 			return xerrors.Errorf("acquire chat model config write lock: %w", err)
@@ -6624,15 +6623,8 @@ func (api *API) createChatModelConfig(rw http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	everyoneReadACL, err := json.Marshal(database.ChatACL{
+	everyoneReadACL := database.ChatACL{
 		defaultOrg.ID.String(): {Permissions: []policy.Action{policy.ActionRead}},
-	})
-	if err != nil {
-		httpapi.Write(ctx, rw, http.StatusInternalServerError, codersdk.Response{
-			Message: "Failed to seed chat model config ACL.",
-			Detail:  err.Error(),
-		})
-		return
 	}
 
 	insertParams := database.InsertChatModelConfigParams{
@@ -6648,7 +6640,7 @@ func (api *API) createChatModelConfig(rw http.ResponseWriter, r *http.Request) {
 		UpdatedBy:            uuid.NullUUID{UUID: apiKey.UserID, Valid: apiKey.UserID != uuid.Nil},
 		OrganizationID:       defaultOrg.ID,
 		GroupACL:             everyoneReadACL,
-		UserACL:              json.RawMessage(`{}`),
+		UserACL:              database.ChatACL{},
 	}
 
 	var inserted database.ChatModelConfig
@@ -7021,6 +7013,8 @@ func (api *API) deleteChatModelConfig(rw http.ResponseWriter, r *http.Request) {
 	rw.WriteHeader(http.StatusNoContent)
 }
 
+// ensureDefaultChatModelConfig preserves one default for every organization
+// that owns at least one chat model config.
 func ensureDefaultChatModelConfig(
 	ctx context.Context,
 	tx database.Store,
@@ -7071,7 +7065,6 @@ func ensureDefaultChatModelConfig(
 		excluded[configID] = struct{}{}
 	}
 
-	candidateConfig := orgModelConfigs[0]
 	var selected *database.ChatModelConfig
 	for i := range orgModelConfigs {
 		config := &orgModelConfigs[i]
@@ -7086,9 +7079,11 @@ func ensureDefaultChatModelConfig(
 			break
 		}
 	}
-	if selected != nil {
-		candidateConfig = *selected
+	if selected == nil {
+		// Re-promoting the excluded sole candidate preserves the required default.
+		selected = &orgModelConfigs[0]
 	}
+	candidateConfig := *selected
 
 	if err := tx.UnsetDefaultChatModelConfigs(ctx, organizationID); err != nil {
 		return xerrors.Errorf("unset default model configs: %w", err)

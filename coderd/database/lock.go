@@ -16,6 +16,8 @@ const (
 	LockIDReconcileSystemRoles
 	LockIDBoundaryUsageStats
 	LockIDAIProvidersEnvSeed
+	// Deprecated: Reserved to prevent reuse. Do not use at runtime.
+	LockIDChatModelConfigWrites
 )
 
 // GenLockID generates a unique and consistent lock ID from a given string.
