@@ -593,7 +593,8 @@ func TestResolveManualTitleModel_TitleGenerationOverrideMissingCredentials(t *te
 	// selection lists the chat org's configs (none) and falls back to the
 	// chat model, which has no model here to build.
 	db.EXPECT().GetEnabledChatModelConfigsByOrganization(gomock.Any(), chat.OrganizationID).Return(nil, nil)
-	db.EXPECT().GetDefaultChatModelConfig(gomock.Any(), chat.OrganizationID).Return(database.ChatModelConfig{}, sql.ErrNoRows)
+	db.EXPECT().GetDefaultChatModelConfig(gomock.Any(), chat.OrganizationID).Return(database.ChatModelConfig{}, sql.ErrNoRows).Times(2)
+	db.EXPECT().GetDefaultOrganization(gomock.Any()).Return(database.Organization{ID: chat.OrganizationID}, nil).Times(2)
 
 	server := titleOverrideTestServer(db, logger)
 	model, gotConfig, err := server.resolveManualTitleModel(
@@ -694,7 +695,8 @@ func TestResolveManualTitleModel_TitleGenerationOverrideSetUnusable(t *testing.T
 	// selection lists the chat org's configs (none) and falls back to the
 	// chat model, which has no model here to build.
 	db.EXPECT().GetEnabledChatModelConfigsByOrganization(gomock.Any(), chat.OrganizationID).Return(nil, nil)
-	db.EXPECT().GetDefaultChatModelConfig(gomock.Any(), chat.OrganizationID).Return(database.ChatModelConfig{}, sql.ErrNoRows)
+	db.EXPECT().GetDefaultChatModelConfig(gomock.Any(), chat.OrganizationID).Return(database.ChatModelConfig{}, sql.ErrNoRows).Times(2)
+	db.EXPECT().GetDefaultOrganization(gomock.Any()).Return(database.Organization{ID: chat.OrganizationID}, nil).Times(2)
 
 	server := titleOverrideTestServer(db, logger)
 	model, gotConfig, err := server.resolveManualTitleModel(

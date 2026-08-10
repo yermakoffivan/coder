@@ -286,11 +286,10 @@ func (c *chatConfigCache) storeModelConfig(snap modelConfigSnapshot, config data
 }
 
 // DefaultModelConfig returns the default model config for the given
-// organization. Until the org-scoping cutover, an org without its own
-// default falls back to the default org's config.
-// TODO(mafredri): remove after CODAGT-709 M3 (org-scoping cutover);
-// orgs resolve strictly within their own configs after the org-scoping
-// cutover.
+// organization. An organization without its own default uses the default
+// organization's config for compatibility with existing chats.
+// TODO(CODAGT-709): remove when existing non-default-organization chats no
+// longer need deployment-default compatibility.
 func (c *chatConfigCache) DefaultModelConfig(ctx context.Context, orgID uuid.UUID) (database.ChatModelConfig, error) {
 	if config, ok := c.cachedDefaultModelConfig(orgID); ok {
 		return config, nil

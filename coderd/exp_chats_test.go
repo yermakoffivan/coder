@@ -4874,7 +4874,7 @@ func TestUpdateChatModelConfig(t *testing.T) {
 		firstUser := coderdtest.CreateFirstUser(t, client.Client)
 		modelConfig := createChatModelConfig(t, client)
 
-		updated, err := client.UpdateChatModelConfig(ctx, modelConfig.ID, codersdk.UpdateChatModelConfigRequest{
+		updated, err := client.UpdateChatModel(ctx, modelConfig.ID, codersdk.UpdateChatModelRequest{
 			IsDefault: ptr.Ref(false),
 		})
 		require.NoError(t, err)
@@ -4906,7 +4906,7 @@ func TestUpdateChatModelConfig(t *testing.T) {
 			IsDefault:      true,
 		})
 
-		updated, err := client.UpdateChatModelConfig(ctx, candidateConfig.ID, codersdk.UpdateChatModelConfigRequest{
+		updated, err := client.UpdateChatModel(ctx, candidateConfig.ID, codersdk.UpdateChatModelRequest{
 			IsDefault: ptr.Ref(true),
 		})
 		require.NoError(t, err)
@@ -5565,7 +5565,7 @@ func TestDeleteChatModelConfig(t *testing.T) {
 			IsDefault:      true,
 		})
 
-		err := client.DeleteChatModelConfig(ctx, defaultConfig.ID)
+		err := client.DeleteChatModel(ctx, defaultConfig.ID)
 		require.NoError(t, err)
 
 		orgDefault, err := db.GetDefaultChatModelConfig(dbauthz.AsSystemRestricted(ctx), firstUser.OrganizationID)

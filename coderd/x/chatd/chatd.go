@@ -1729,8 +1729,8 @@ func validateEditTarget(ctx context.Context, store database.Store, chatID uuid.U
 //
 // The returned config's OrganizationID identifies which org's configs
 // apply, so callers that need the whole list can read it from there.
-// TODO(mafredri): remove after CODAGT-709 M3 (org-scoping cutover);
-// per-org resolution becomes strict.
+// TODO(CODAGT-709): remove when existing non-default-organization chats no
+// longer need deployment-default compatibility.
 func defaultChatModelConfigForOrg(
 	ctx context.Context,
 	store database.Store,
@@ -1762,8 +1762,8 @@ func defaultChatModelConfigForOrg(
 // configs can all be disabled or use disabled providers. The resolved default
 // config is the ownership marker because every write path preserves one default
 // in each organization that owns configs.
-// TODO(mafredri): remove after CODAGT-709 M3 (org-scoping cutover);
-// organizations list strictly within their own configs.
+// TODO(CODAGT-709): remove when existing non-default-organization chats no
+// longer need deployment-default compatibility.
 func enabledChatModelConfigsWithDefaultOrgFallback(
 	ctx context.Context,
 	store database.Store,

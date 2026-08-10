@@ -55,8 +55,8 @@ func readTitleGenerationModelOverride(
 // resolveTitleGenerationModelOverride resolves the deployment-wide title
 // generation model override. overrideSet is true when an override was
 // configured and resolved; a configured override that does not resolve
-// (unknown, disabled, or cross-org config) is ignored, and model
-// construction failures after a successful resolution stay hard failures.
+// because it is unknown or disabled is ignored. Model construction failures
+// after a successful resolution stay hard failures.
 // When overrideSet is false, callers may fall back to the default title
 // model.
 func (p *Server) resolveTitleGenerationModelOverride(
