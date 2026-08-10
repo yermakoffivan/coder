@@ -854,6 +854,9 @@ func latestAssistantText(messages []database.ChatMessage) string {
 
 // Returns enabled requested configs visible to the chat organization. Filtering
 // here preserves the pre-org-scoping behavior of skipping disabled configs.
+// ACLs are deliberately not re-checked: revocation blocks new selection but
+// leaves already-selected servers usable, like template ACLs for running
+// workspaces. Disabling or deleting the config cuts off existing chats.
 func enabledMCPServerConfigsForChatOrg(
 	ctx context.Context,
 	db database.Store,
