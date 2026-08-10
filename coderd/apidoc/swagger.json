@@ -16667,6 +16667,10 @@
 					"type": "string",
 					"format": "uri"
 				},
+				"email": {
+					"type": "string",
+					"format": "email"
+				},
 				"id": {
 					"type": "string",
 					"format": "uuid"
@@ -19443,6 +19447,10 @@
 					"type": "string",
 					"format": "uri"
 				},
+				"email": {
+					"type": "string",
+					"format": "email"
+				},
 				"id": {
 					"type": "string",
 					"format": "uuid"
@@ -21732,7 +21740,7 @@
 		},
 		"codersdk.ReducedUser": {
 			"type": "object",
-			"required": ["created_at", "email", "id", "username"],
+			"required": ["created_at", "id", "username"],
 			"properties": {
 				"avatar_url": {
 					"type": "string",
@@ -23308,7 +23316,7 @@
 		},
 		"codersdk.TemplateUser": {
 			"type": "object",
-			"required": ["created_at", "email", "id", "username"],
+			"required": ["created_at", "id", "username"],
 			"properties": {
 				"avatar_url": {
 					"type": "string",
@@ -24332,7 +24340,7 @@
 		},
 		"codersdk.User": {
 			"type": "object",
-			"required": ["created_at", "email", "id", "username"],
+			"required": ["created_at", "id", "username"],
 			"properties": {
 				"avatar_url": {
 					"type": "string",
@@ -26285,6 +26293,10 @@
 				"avatar_url": {
 					"type": "string",
 					"format": "uri"
+				},
+				"email": {
+					"type": "string",
+					"format": "email"
 				},
 				"id": {
 					"type": "string",
