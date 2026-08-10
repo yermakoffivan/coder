@@ -6439,19 +6439,20 @@ func (*API) deleteUserChatProviderKey(rw http.ResponseWriter, r *http.Request) {
 func (api *API) listChatModelConfigs(rw http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	// Users authorized to read chat model configs in any org see the configs
-	// their authorization filter admits (including disabled ones) for
-	// management purposes. Other users see only enabled configs, which is
-	// sufficient for using the chat feature. AnyOrganization routes
-	// org-scoped readers (org admin, org auditor) to the authorized list as
-	// well as site readers; the SQL filter then restricts them to their orgs.
-	isAdmin := api.Authorize(r, policy.ActionRead, rbac.ResourceChatModelConfig.AnyOrganization())
+	// Site-wide readers see every authorized config, including disabled ones.
+	// The enabled-config fallback is deployment-wide until the org-scoping
+	// cutover, so org-scoped readers stay on that path to keep their usable
+	// config list from shrinking. ACL-only grants take effect when the cutover
+	// replaces the fallback with an org-scoped authorized query.
+	canReadAllConfigs := api.Authorize(r, policy.ActionRead, rbac.ResourceChatModelConfig)
 
 	var configs []database.ChatModelConfig
 	var err error
-	if isAdmin {
+	if canReadAllConfigs {
 		configs, err = api.Database.GetChatModelConfigs(ctx)
 	} else {
+		// TODO(mafredri): replace this deployment-wide fallback with an
+		// org-scoped authorized query after CODAGT-709 M3 (org-scoping cutover).
 		//nolint:gocritic // All authenticated users need to read enabled model configs to use the chat feature.
 		rows, rowsErr := api.Database.GetEnabledChatModelConfigs(dbauthz.AsChatd(ctx))
 		err = rowsErr
@@ -6524,10 +6525,9 @@ func (api *API) inChatModelConfigWriteTx(
 func (api *API) createChatModelConfig(rw http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	apiKey := httpmw.APIKey(r)
-	// Interim write gate: pins write access to the pre-RBAC-resource set
-	// (deployment admins) while configs still serve every org through the
-	// default-org fallback. Without it the dbauthz create-in-org check
-	// would let default-org org admins manage configs used by all orgs.
+	// Writes require deployment-config update in both the handler and dbauthz.
+	// Keep this handler gate until the org-scoping cutover, because configs
+	// still serve every organization through the default-org fallback.
 	// TODO(mafredri): remove after CODAGT-709 M3 (org-scoping cutover)
 	if !api.Authorize(r, policy.ActionUpdate, rbac.ResourceDeploymentConfig) {
 		httpapi.Forbidden(rw)

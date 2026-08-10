@@ -2175,10 +2175,7 @@ func (q *querier) DeleteChatDebugDataByChatID(ctx context.Context, arg database.
 }
 
 func (q *querier) DeleteChatModelConfigByID(ctx context.Context, id uuid.UUID) (database.ChatModelConfig, error) {
-	// Interim: keep the deployment-config update check so the old write
-	// handlers admit exactly the pre-RBAC-resource set during the fallback
-	// window. The fetch-then-authorize object delete check lands with the
-	// cutover.
+	// Interim write gate: see InsertChatModelConfig.
 	// TODO(mafredri): swap to ResourceChatModelConfig object delete after CODAGT-709 M3 (org-scoping cutover)
 	if err := q.authorizeContext(ctx, policy.ActionUpdate, rbac.ResourceDeploymentConfig); err != nil {
 		return database.ChatModelConfig{}, err
@@ -3455,10 +3452,8 @@ func (q *querier) GetChatMessagesForPromptByChatID(ctx context.Context, chatID u
 }
 
 func (q *querier) GetChatModelConfigByID(ctx context.Context, id uuid.UUID) (database.ChatModelConfig, error) {
-	// Interim: keep the deployment-config read check so the old write
-	// handlers' object reads admit exactly the pre-RBAC-resource set
-	// during the fallback window. The fetch-then-authorize object read
-	// lands with the cutover.
+	// Interim: object reads keep the deployment-config read check for the same
+	// reason that writes do. See InsertChatModelConfig.
 	// TODO(mafredri): swap to ResourceChatModelConfig object read after CODAGT-709 M3 (org-scoping cutover)
 	if err := q.authorizeContext(ctx, policy.ActionRead, rbac.ResourceDeploymentConfig); err != nil {
 		return database.ChatModelConfig{}, err
@@ -3469,7 +3464,7 @@ func (q *querier) GetChatModelConfigByID(ctx context.Context, id uuid.UUID) (dat
 func (q *querier) GetChatModelConfigs(ctx context.Context) ([]database.ChatModelConfig, error) {
 	prep, err := prepareSQLFilter(ctx, q.auth, policy.ActionRead, rbac.ResourceChatModelConfig.Type)
 	if err != nil {
-		return nil, err
+		return nil, xerrors.Errorf("(dev error) prepare sql filter: %w", err)
 	}
 	return q.db.GetAuthorizedChatModelConfigs(ctx, prep)
 }
@@ -3742,6 +3737,8 @@ func (q *querier) GetEligibleProvisionerDaemonsByProvisionerJobIDs(ctx context.C
 }
 
 func (q *querier) GetEnabledChatModelConfigByID(ctx context.Context, id uuid.UUID) (database.ChatModelConfig, error) {
+	// TODO(mafredri): authorize the fetched object after CODAGT-709 M3
+	// (org-scoping cutover).
 	if err := q.authorizeContext(ctx, policy.ActionRead, rbac.ResourceChatModelConfig); err != nil {
 		return database.ChatModelConfig{}, err
 	}
@@ -3749,6 +3746,8 @@ func (q *querier) GetEnabledChatModelConfigByID(ctx context.Context, id uuid.UUI
 }
 
 func (q *querier) GetEnabledChatModelConfigs(ctx context.Context) ([]database.GetEnabledChatModelConfigsRow, error) {
+	// TODO(mafredri): replace this deployment-wide query after CODAGT-709 M3
+	// (org-scoping cutover).
 	if err := q.authorizeContext(ctx, policy.ActionRead, rbac.ResourceChatModelConfig); err != nil {
 		return nil, err
 	}
@@ -3756,7 +3755,7 @@ func (q *querier) GetEnabledChatModelConfigs(ctx context.Context) ([]database.Ge
 }
 
 func (q *querier) GetEnabledChatModelConfigsByOrganization(ctx context.Context, organizationID uuid.UUID) ([]database.GetEnabledChatModelConfigsByOrganizationRow, error) {
-	if err := q.authorizeContext(ctx, policy.ActionRead, rbac.ResourceChatModelConfig); err != nil {
+	if err := q.authorizeContext(ctx, policy.ActionRead, rbac.ResourceChatModelConfig.InOrg(organizationID)); err != nil {
 		return nil, err
 	}
 	return q.db.GetEnabledChatModelConfigsByOrganization(ctx, organizationID)
@@ -6057,9 +6056,9 @@ func (q *querier) InsertChatMessages(ctx context.Context, arg database.InsertCha
 }
 
 func (q *querier) InsertChatModelConfig(ctx context.Context, arg database.InsertChatModelConfigParams) (database.ChatModelConfig, error) {
-	// Interim: keep the deployment-config update check so the old write
-	// handlers admit exactly the pre-RBAC-resource set during the fallback
-	// window. The org-scoped create-in-org check lands with the cutover.
+	// Chat model configs still serve every organization through the default-org
+	// fallback, so writes keep the deployment-config check. An organization
+	// administrator must not manage configs that other organizations read.
 	// TODO(mafredri): swap to ResourceChatModelConfig create-in-org after CODAGT-709 M3 (org-scoping cutover)
 	if err := q.authorizeContext(ctx, policy.ActionUpdate, rbac.ResourceDeploymentConfig); err != nil {
 		return database.ChatModelConfig{}, err
@@ -7244,8 +7243,8 @@ func (q *querier) UnpinChatByID(ctx context.Context, id uuid.UUID) error {
 }
 
 func (q *querier) UnsetDefaultChatModelConfigs(ctx context.Context, organizationID uuid.UUID) error {
-	// Interim: keep the system update check so the old write handlers admit
-	// exactly the pre-RBAC-resource set during the fallback window.
+	// Interim write gate: see InsertChatModelConfig. Default transitions keep
+	// their system update check until the org-scoping cutover.
 	// TODO(mafredri): swap to ResourceChatModelConfig update-in-org after CODAGT-709 M3 (org-scoping cutover)
 	if err := q.authorizeContext(ctx, policy.ActionUpdate, rbac.ResourceSystem); err != nil {
 		return err
@@ -7426,9 +7425,7 @@ func (q *querier) UpdateChatMCPServerIDs(ctx context.Context, arg database.Updat
 }
 
 func (q *querier) UpdateChatModelConfig(ctx context.Context, arg database.UpdateChatModelConfigParams) (database.ChatModelConfig, error) {
-	// Interim: keep the deployment-config update check so the old write
-	// handlers admit exactly the pre-RBAC-resource set during the fallback
-	// window. The fetch-then-authorize object check lands with the cutover.
+	// Interim write gate: see InsertChatModelConfig.
 	// TODO(mafredri): swap to ResourceChatModelConfig object update after CODAGT-709 M3 (org-scoping cutover)
 	if err := q.authorizeContext(ctx, policy.ActionUpdate, rbac.ResourceDeploymentConfig); err != nil {
 		return database.ChatModelConfig{}, err
@@ -9390,16 +9387,12 @@ func (q *querier) GetAuthorizedChatModelConfigs(ctx context.Context, prepared rb
 	return q.db.GetAuthorizedChatModelConfigs(ctx, prepared)
 }
 
-// GetDefaultChatModelConfigCandidates enumerates the configs that
-// ensureDefaultChatModelConfig may promote to default after a demotion or
-// deletion. It keeps the pre-RBAC-resource contract (deployment-config read,
-// unfiltered) so the old write handlers' default-election logic admits
-// exactly the pre-resource set during the fallback window. The read-side
-// management list is GetChatModelConfigs, which uses the authorized filter.
+// GetDefaultChatModelConfigCandidates keeps the deployment-config read check
+// that guards default election during the fallback window.
 // TODO(mafredri): remove after CODAGT-709 M3 (org-scoping cutover)
 func (q *querier) GetDefaultChatModelConfigCandidates(ctx context.Context) ([]database.ChatModelConfig, error) {
 	if err := q.authorizeContext(ctx, policy.ActionRead, rbac.ResourceDeploymentConfig); err != nil {
 		return nil, err
 	}
-	return q.db.GetChatModelConfigs(ctx)
+	return q.db.GetDefaultChatModelConfigCandidates(ctx)
 }

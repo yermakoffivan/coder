@@ -476,8 +476,7 @@ func ReloadBuiltinRoles(opts *RoleOptions) {
 			// Allow auditors to query deployment stats and insights.
 			ResourceDeploymentStats.Type:  {policy.ActionRead},
 			ResourceDeploymentConfig.Type: {policy.ActionRead},
-			// Chat model configs are org-scoped but auditors retain their
-			// deployment-config read parity with a site-level read here.
+			// Allow auditors to read chat model configs across the deployment.
 			ResourceChatModelConfig.Type: {policy.ActionRead},
 			// Allow auditors to query AI Bridge interceptions.
 			ResourceAibridgeInterception.Type: {policy.ActionRead},
@@ -614,8 +613,7 @@ func ReloadBuiltinRoles(opts *RoleOptions) {
 							ResourceGroupMember.Type:        {policy.ActionRead},
 							ResourceOrganization.Type:       {policy.ActionRead},
 							ResourceOrganizationMember.Type: {policy.ActionRead},
-							// Organization auditors read the org's chat model configs.
-							ResourceChatModelConfig.Type: {policy.ActionRead},
+							ResourceChatModelConfig.Type:    {policy.ActionRead},
 						}),
 						Member: []Permission{},
 					},

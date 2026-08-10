@@ -58,10 +58,9 @@ type customQuerier interface {
 
 type chatModelConfigQuerier interface {
 	GetAuthorizedChatModelConfigs(ctx context.Context, prepared rbac.PreparedAuthorized) ([]ChatModelConfig, error)
-	// GetDefaultChatModelConfigCandidates enumerates the configs that
-	// ensureDefaultChatModelConfig may promote to default. It is the
-	// unfiltered list, kept separate from the authorized management list so
-	// the two contracts are not overloaded on one method.
+	// GetDefaultChatModelConfigCandidates returns every non-deleted config in
+	// every organization without an authorization filter. The caller selects
+	// one organization's promotion candidate from this deployment-wide list.
 	GetDefaultChatModelConfigCandidates(ctx context.Context) ([]ChatModelConfig, error)
 }
 

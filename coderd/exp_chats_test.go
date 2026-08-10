@@ -4134,9 +4134,6 @@ func TestCreateChatModelConfig(t *testing.T) {
 		t.Parallel()
 
 		ctx := testutil.Context(t, testutil.WaitLong)
-		// dbauthz rejects site-permission roles on the authorized
-		// querier; seed the role through the raw store, as persisted
-		// site custom roles exist in production deployments.
 		rawDB, pubsub := dbtestutil.NewDB(t)
 		client := newChatClient(t, func(opts *coderdtest.Options) {
 			opts.Database = rawDB
@@ -4145,50 +4142,29 @@ func TestCreateChatModelConfig(t *testing.T) {
 		_ = coderdtest.CreateFirstUser(t, client.Client)
 		nonDefaultOrg := dbgen.Organization(t, rawDB, database.Organization{IsDefault: false})
 
-		// A custom site role holding only deployment-config permissions
-		// passes the route gate but cannot read the default organization
-		// object; the default-org resolution is an internal step and must
-		// not require caller-held organization read. The owning org is a
-		// label on the role; the site permissions apply deployment-wide.
-		role, err := rawDB.InsertCustomRole(ctx, database.InsertCustomRoleParams{
-			Name:           testutil.GetRandomName(t),
-			DisplayName:    "Deployment Config Admin",
-			OrganizationID: uuid.NullUUID{UUID: nonDefaultOrg.ID, Valid: true},
-			SitePermissions: database.CustomRolePermissions{
-				{
-					ResourceType: rbac.ResourceDeploymentConfig.Type,
-					Action:       policy.ActionRead,
-				},
-				{
-					ResourceType: rbac.ResourceDeploymentConfig.Type,
-					Action:       policy.ActionUpdate,
-				},
+		// The user belongs only to a non-default organization. Default-org
+		// resolution is internal and must not require read access to that org.
+		adminClient := newSiteCustomRoleClient(
+			ctx,
+			t,
+			client,
+			rawDB,
+			nonDefaultOrg.ID,
+			database.CustomRolePermission{
+				ResourceType: rbac.ResourceDeploymentConfig.Type,
+				Action:       policy.ActionRead,
 			},
-		})
-		require.NoError(t, err)
+			database.CustomRolePermission{
+				ResourceType: rbac.ResourceDeploymentConfig.Type,
+				Action:       policy.ActionUpdate,
+			},
+		)
 
 		aiProvider := createAIProviderForTest(t, client, "openai", "test-api-key")
 		// An existing deployment default keeps the create off the
 		// self-promotion path, which is a separate system-scoped
 		// authorization requirement.
 		_ = createChatModelConfig(t, client)
-
-		// A member of a non-default org cannot read the default
-		// organization object; the implicit organization-member role
-		// grants organization read only within its own org.
-		adminClientRaw, adminUser := coderdtest.CreateAnotherUser(
-			t,
-			client.Client,
-			nonDefaultOrg.ID,
-		)
-		_, err = client.Client.UpdateOrganizationMemberRoles(
-			ctx,
-			nonDefaultOrg.ID,
-			adminUser.ID.String(),
-			codersdk.UpdateRoles{Roles: []string{role.Name}},
-		)
-		require.NoError(t, err)
-		adminClient := codersdk.NewExperimentalClient(adminClientRaw)
 
 		contextLimit := int64(4096)
 		modelConfig, err := adminClient.CreateChatModelConfig(ctx, codersdk.CreateChatModelConfigRequest{
@@ -4214,18 +4190,14 @@ func TestCreateChatModelConfig(t *testing.T) {
 		require.Equal(t, database.ChatACL{}, row.UserACL)
 	})
 
-	// A persisted custom role holding only deployment-config permissions is
-	// the pre-RBAC-resource admission set for the old write routes. While the
-	// default-org fallback keeps every config deployment-serving (until the
-	// M3 cutover), the interim gates and the reverted dbauthz write checks
-	// must keep admitting exactly that set for the full write lifecycle.
+	// The handler gates and dbauthz write checks admit deployment-config
+	// administrators while every config still serves every organization through
+	// the default-org fallback. This test pins that admission set across the
+	// create, update, delete, and default-transition paths.
 	t.Run("DeploymentConfigOnlyRoleWritesThroughWindow", func(t *testing.T) {
 		t.Parallel()
 
-		ctx := testutil.Context(t, testutil.WaitLong)
-		// dbauthz rejects site-permission roles on the authorized querier;
-		// seed the role through the raw store, as persisted site custom
-		// roles exist in production deployments.
+		setupCtx := testutil.Context(t, testutil.WaitLong)
 		rawDB, pubsub := dbtestutil.NewDB(t)
 		client := newChatClient(t, func(opts *coderdtest.Options) {
 			opts.Database = rawDB
@@ -4233,30 +4205,22 @@ func TestCreateChatModelConfig(t *testing.T) {
 		})
 		_ = coderdtest.CreateFirstUser(t, client.Client)
 		nonDefaultOrg := dbgen.Organization(t, rawDB, database.Organization{IsDefault: false})
-		// The org's Everyone group shares the org ID (migration 000058), and
-		// M1 seeds every config's everyone-read ACL under that key.
-		dbgen.Group(t, rawDB, database.Group{
-			ID:             nonDefaultOrg.ID,
-			Name:           database.EveryoneGroup,
-			OrganizationID: nonDefaultOrg.ID,
-		})
 
-		role, err := rawDB.InsertCustomRole(ctx, database.InsertCustomRoleParams{
-			Name:           testutil.GetRandomName(t),
-			DisplayName:    "Deployment Config Admin",
-			OrganizationID: uuid.NullUUID{UUID: nonDefaultOrg.ID, Valid: true},
-			SitePermissions: database.CustomRolePermissions{
-				{
-					ResourceType: rbac.ResourceDeploymentConfig.Type,
-					Action:       policy.ActionRead,
-				},
-				{
-					ResourceType: rbac.ResourceDeploymentConfig.Type,
-					Action:       policy.ActionUpdate,
-				},
+		writerClient := newSiteCustomRoleClient(
+			setupCtx,
+			t,
+			client,
+			rawDB,
+			nonDefaultOrg.ID,
+			database.CustomRolePermission{
+				ResourceType: rbac.ResourceDeploymentConfig.Type,
+				Action:       policy.ActionRead,
 			},
-		})
-		require.NoError(t, err)
+			database.CustomRolePermission{
+				ResourceType: rbac.ResourceDeploymentConfig.Type,
+				Action:       policy.ActionUpdate,
+			},
+		)
 
 		aiProvider := createAIProviderForTest(t, client, "openai", "test-api-key")
 		// The first config self-elects as the deployment default; the
@@ -4265,64 +4229,47 @@ func TestCreateChatModelConfig(t *testing.T) {
 		// off the self-promotion path.
 		defaultConfig := createChatModelConfig(t, client)
 
-		writerClientRaw, writerUser := coderdtest.CreateAnotherUser(
-			t,
-			client.Client,
-			nonDefaultOrg.ID,
-		)
-		_, err = client.Client.UpdateOrganizationMemberRoles(
-			ctx,
-			nonDefaultOrg.ID,
-			writerUser.ID.String(),
-			codersdk.UpdateRoles{Roles: []string{role.Name}},
-		)
-		require.NoError(t, err)
-		writerClient := codersdk.NewExperimentalClient(writerClientRaw)
-
 		contextLimit := int64(4096)
-		modelConfig, err := writerClient.CreateChatModelConfig(ctx, codersdk.CreateChatModelConfigRequest{
+		modelConfig, err := writerClient.CreateChatModelConfig(setupCtx, codersdk.CreateChatModelConfigRequest{
 			AIProviderID: &aiProvider.ID,
 			Model:        "gpt-4o-mini",
 			ContextLimit: &contextLimit,
 		})
 		require.NoError(t, err)
 
-		updated, err := writerClient.UpdateChatModelConfig(ctx, modelConfig.ID, codersdk.UpdateChatModelConfigRequest{
+		updated, err := writerClient.UpdateChatModelConfig(setupCtx, modelConfig.ID, codersdk.UpdateChatModelConfigRequest{
 			DisplayName: "Window Write",
 		})
 		require.NoError(t, err)
 		require.Equal(t, "Window Write", updated.DisplayName)
 
-		require.NoError(t, writerClient.DeleteChatModelConfig(ctx, modelConfig.ID))
+		require.NoError(t, writerClient.DeleteChatModelConfig(setupCtx, modelConfig.ID))
 
-		// Demoting or deleting the current default forces
-		// ensureDefaultChatModelConfig to enumerate replacement candidates.
-		// A deployment-config-only role has no chat_model_config read grant,
-		// so the promotion's UnsetDefaultChatModelConfigs (system update)
-		// must reject and roll the transition back, exactly as before the
-		// RBAC resource existed. An authorized-filter candidate list would
-		// instead return zero rows and commit with no default.
-		// TODO(mafredri): remove after CODAGT-709 M3 (org-scoping cutover)
+		// Demoting or deleting the current default makes
+		// ensureDefaultChatModelConfig enumerate replacement candidates.
+		// GetDefaultChatModelConfigCandidates authorizes deployment-config read,
+		// so this role gets candidates. Promotion then rejects on
+		// UnsetDefaultChatModelConfigs (system update), which rolls the transition
+		// back. An authorized chat_model_config filter would return no rows and
+		// commit the transition without a default.
+		// TODO(mafredri): remove these interim-behavior subtests after
+		// CODAGT-709 M3 (org-scoping cutover).
 
 		t.Run("DefaultDemoteRollsBack", func(t *testing.T) {
-			// Demote the current default; the replacement promotion's
-			// UnsetDefaultChatModelConfigs (system update) must reject and
-			// roll the whole transition back, exactly as before the RBAC
-			// resource existed.
+			ctx := testutil.Context(t, testutil.WaitLong)
 			notDefault := false
 			_, err := writerClient.UpdateChatModelConfig(ctx, defaultConfig.ID, codersdk.UpdateChatModelConfigRequest{
 				IsDefault: &notDefault,
 			})
-			require.Error(t, err, "demote-default must fail for a deployment-config-only role")
+			requireChatModelConfigAuthzError(t, err)
 			row, dbErr := rawDB.GetChatModelConfigByID(ctx, defaultConfig.ID)
 			require.NoError(t, dbErr)
 			require.True(t, row.IsDefault, "demote must have rolled back")
 		})
 
 		t.Run("DefaultDeleteRollsBack", func(t *testing.T) {
-			// A second config exists so the deletion triggers a replacement
-			// promotion; the promotion's UnsetDefaultChatModelConfigs
-			// (system update) must reject and roll the delete back.
+			ctx := testutil.Context(t, testutil.WaitLong)
+			// This replacement makes the deletion trigger a promotion.
 			replacement, err := writerClient.CreateChatModelConfig(ctx, codersdk.CreateChatModelConfigRequest{
 				AIProviderID: &aiProvider.ID,
 				Model:        "gpt-4o-mini-replacement",
@@ -4330,7 +4277,7 @@ func TestCreateChatModelConfig(t *testing.T) {
 			})
 			require.NoError(t, err)
 			err = writerClient.DeleteChatModelConfig(ctx, defaultConfig.ID)
-			require.Error(t, err, "delete-default with a replacement must fail for a deployment-config-only role")
+			requireChatModelConfigAuthzError(t, err)
 			row, dbErr := rawDB.GetChatModelConfigByID(ctx, defaultConfig.ID)
 			require.NoError(t, dbErr)
 			require.True(t, row.IsDefault, "delete must have rolled back")
@@ -4341,12 +4288,9 @@ func TestCreateChatModelConfig(t *testing.T) {
 		})
 
 		t.Run("PromoteNonDefaultRequiresSystemUpdate", func(t *testing.T) {
-			// Promoting a non-default config to default requires
-			// UnsetDefaultChatModelConfigs (system update), which a
-			// deployment-config-only role does not hold. This covers only the
-			// system-update check: UnsetDefaultChatModelConfigs runs before
-			// any candidate lookup, so it does not exercise the candidate-list
-			// path and is not candidate-list coverage.
+			ctx := testutil.Context(t, testutil.WaitLong)
+			// UnsetDefaultChatModelConfigs runs before candidate lookup, so this
+			// promotion exercises only the system update check.
 			candidate, err := writerClient.CreateChatModelConfig(ctx, codersdk.CreateChatModelConfigRequest{
 				AIProviderID: &aiProvider.ID,
 				Model:        "gpt-4o-mini-promote",
@@ -4357,7 +4301,7 @@ func TestCreateChatModelConfig(t *testing.T) {
 			_, err = writerClient.UpdateChatModelConfig(ctx, candidate.ID, codersdk.UpdateChatModelConfigRequest{
 				IsDefault: &isDefault,
 			})
-			require.Error(t, err, "promote must fail for a deployment-config-only role")
+			requireChatModelConfigAuthzError(t, err)
 			row, dbErr := rawDB.GetChatModelConfigByID(ctx, candidate.ID)
 			require.NoError(t, dbErr)
 			require.False(t, row.IsDefault, "promote must have rolled back")
@@ -12320,6 +12264,15 @@ func TestWatchChatGitAuthz(t *testing.T) {
 	require.NoError(t, err)
 	defer res.Body.Close()
 	require.Equal(t, http.StatusForbidden, res.StatusCode)
+}
+
+func requireChatModelConfigAuthzError(t testing.TB, err error) {
+	t.Helper()
+	require.Error(t, err)
+	apiErr, ok := codersdk.AsError(err)
+	require.True(t, ok)
+	require.Equal(t, http.StatusInternalServerError, apiErr.StatusCode())
+	require.Contains(t, apiErr.Detail, "unauthorized")
 }
 
 func createAIProviderForTest(

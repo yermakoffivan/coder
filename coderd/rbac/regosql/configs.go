@@ -82,8 +82,8 @@ func chatBaseConverter() *sqltypes.VariableConverter {
 	)
 }
 
-// ChatModelConfigConverter qualifies columns against the chat_model_configs
-// alias used by GetChatModelConfigs. Chat model configs have no user owner,
+// ChatModelConfigConverter qualifies columns against the cmc alias used by
+// GetChatModelConfigs. Chat model configs have no user owner,
 // only an organization owner.
 func ChatModelConfigConverter() *sqltypes.VariableConverter {
 	matcher := sqltypes.NewVariableConverter().RegisterMatcher(
