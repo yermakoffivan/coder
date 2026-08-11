@@ -19,7 +19,7 @@ AI Governance Cost Control requires:
 > [!NOTE]
 > AI Governance Cost Control reports approximate spend rather than billed cost.
 > These figures will not match your provider invoices exactly. For details, see
-> [How spend is approximated](#how-spend-is-approximated).
+> [How spend is calculated](#how-spend-is-calculated).
 
 These terms appear throughout this page and in the Coder dashboard:
 
@@ -181,7 +181,7 @@ affected user:
 For delivery methods, see
 [Notifications](../../admin/monitoring/notifications/index.md).
 
-## How spend is approximated
+## How spend is calculated
 
 Coder multiplies the token usage of each request by the published price of the
 model that served it. Prices come from a curated [models.dev](https://models.dev)
@@ -203,7 +203,7 @@ Replace `<VERSION>` with your Coder minor version, for example `2.36`.
 > Approximate spend can differ from provider-reported amounts, and some usage
 > might not count toward spend:
 >
-> - Approximations exclude negotiated discounts, committed-use pricing, and
+> - Approximate spend excludes negotiated discounts, committed-use pricing, and
 >   provider-specific billing rules.
 > - Requests to models that are missing from the price table record token usage
 >   but add nothing to a user's spend. A user who only calls unpriced models is
@@ -296,7 +296,7 @@ Expect the following differences:
   Control applied the lowest.
 - Budgets cover priced AI Gateway traffic. Chat, IDE extensions, and CLI agents
   draw on the same budget when their provider and model are priced. See
-  [How spend is approximated](#how-spend-is-approximated).
+  [How spend is calculated](#how-spend-is-calculated).
 - Recorded spend does not carry over. Every user starts the first period at
   $0 USD.
 - Coder Agents users who exceed their budget see a usage limit error in chat.
