@@ -22,6 +22,7 @@ import (
 	"github.com/coder/coder/v2/coderd/coderdtest"
 	"github.com/coder/coder/v2/coderd/httpapi"
 	"github.com/coder/coder/v2/codersdk"
+	"github.com/coder/coder/v2/codersdk/toolsdk"
 	"github.com/coder/coder/v2/testutil"
 	"github.com/coder/coder/v2/testutil/expecter"
 )
@@ -113,6 +114,72 @@ func TestExpMcpServer(t *testing.T) {
 		require.Contains(t, output, owner.UserID.String(), "should have received the expected user ID")
 		cancel()
 		<-cmdDone
+	})
+
+	t.Run("Prompts", func(t *testing.T) {
+		t.Parallel()
+
+		ctx := testutil.Context(t, testutil.WaitShort)
+		logger := testutil.Logger(t)
+		cancelCtx, cancel := context.WithCancel(ctx)
+		t.Cleanup(cancel)
+
+		client := coderdtest.New(t, nil)
+		_ = coderdtest.CreateFirstUser(t, client)
+		inv, root := clitest.New(t, "exp", "mcp", "server")
+		inv = inv.WithContext(cancelCtx)
+
+		var stdout *expecter.Expecter
+		stdout, inv.Stdout = expecter.NewPiped(t)
+		stdin := testutil.NewWriterAttachedToInvocation(t, logger.Named("stdin"), inv)
+		clitest.SetupConfig(t, client, root)
+
+		cmdDone := make(chan struct{})
+		go func() {
+			defer close(cmdDone)
+			err := inv.Run()
+			assert.NoError(t, err)
+		}()
+
+		stdin.WriteLine(`{"jsonrpc":"2.0","id":1,"method":"prompts/list"}`)
+		output := stdout.ReadLine(ctx)
+		var listResponse struct {
+			Result struct {
+				Prompts []struct {
+					Name string `json:"name"`
+				} `json:"prompts"`
+			} `json:"result"`
+		}
+		err := json.Unmarshal([]byte(output), &listResponse)
+		require.NoError(t, err)
+		foundPrompts := make([]string, 0, len(listResponse.Result.Prompts))
+		for _, prompt := range listResponse.Result.Prompts {
+			foundPrompts = append(foundPrompts, prompt.Name)
+		}
+		for _, prompt := range toolsdk.AllPrompts {
+			require.Contains(t, foundPrompts, prompt.Name)
+		}
+
+		stdin.WriteLine(`{"jsonrpc":"2.0","id":2,"method":"prompts/get","params":{"name":"coder_agents_delegate","arguments":{"task":"Fix the flaky test."}}}`)
+		output = stdout.ReadLine(ctx)
+		cancel()
+		<-cmdDone
+
+		var getResponse struct {
+			Result struct {
+				Messages []struct {
+					Role    string `json:"role"`
+					Content struct {
+						Text string `json:"text"`
+					} `json:"content"`
+				} `json:"messages"`
+			} `json:"result"`
+		}
+		err = json.Unmarshal([]byte(output), &getResponse)
+		require.NoError(t, err)
+		require.Len(t, getResponse.Result.Messages, 1)
+		require.Equal(t, "user", getResponse.Result.Messages[0].Role)
+		require.Contains(t, getResponse.Result.Messages[0].Content.Text, "Fix the flaky test.")
 	})
 
 	t.Run("OK", func(t *testing.T) {

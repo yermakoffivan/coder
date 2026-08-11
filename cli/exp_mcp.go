@@ -754,6 +754,14 @@ func (s *mcpServer) startServer(ctx context.Context, inv *serpent.Invocation, in
 		mcpSrv.AddTools(mcpFromSDK(tool, toolDeps))
 	}
 
+	// The prompts guide the use of the chat tools, so register them only
+	// when those tools are available.
+	if s.client != nil && (len(allowedTools) == 0 || slices.Contains(allowedTools, toolsdk.ToolNameCreateChat)) {
+		for _, prompt := range toolsdk.AllPrompts {
+			mcpSrv.AddPrompts(mcpPromptFromSDK(prompt))
+		}
+	}
+
 	srv := server.NewStdioServer(mcpSrv)
 	done := make(chan error)
 	go func() {
@@ -1023,6 +1031,30 @@ func mcpFromSDK(sdkTool toolsdk.GenericTool, tb toolsdk.Deps) server.ServerTool 
 					mcp.NewTextContent(string(result)),
 				},
 			}, nil
+		},
+	}
+}
+
+// mcpPromptFromSDK adapts a toolsdk.Prompt to go-mcp's server.ServerPrompt.
+func mcpPromptFromSDK(sdkPrompt toolsdk.Prompt) server.ServerPrompt {
+	opts := []mcp.PromptOption{mcp.WithPromptDescription(sdkPrompt.Description)}
+	for _, arg := range sdkPrompt.Arguments {
+		argOpts := []mcp.ArgumentOption{mcp.ArgumentDescription(arg.Description)}
+		if arg.Required {
+			argOpts = append(argOpts, mcp.RequiredArgument())
+		}
+		opts = append(opts, mcp.WithArgument(arg.Name, argOpts...))
+	}
+	return server.ServerPrompt{
+		Prompt: mcp.NewPrompt(sdkPrompt.Name, opts...),
+		Handler: func(_ context.Context, request mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
+			text, err := sdkPrompt.Render(request.Params.Arguments)
+			if err != nil {
+				return nil, err
+			}
+			return mcp.NewGetPromptResult(sdkPrompt.Description, []mcp.PromptMessage{
+				mcp.NewPromptMessage(mcp.RoleUser, mcp.NewTextContent(text)),
+			}), nil
 		},
 	}
 }

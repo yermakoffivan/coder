@@ -96,6 +96,13 @@ func (s *Server) RegisterTools(client *codersdk.Client, opts ...func(*toolsdk.De
 	return nil
 }
 
+// RegisterPrompts registers all MCP prompt templates with the server.
+func (s *Server) RegisterPrompts() {
+	for _, prompt := range toolsdk.AllPrompts {
+		s.mcpServer.AddPrompts(mcpPromptFromSDK(prompt))
+	}
+}
+
 // ChatGPT tools are the search and fetch tools as defined in https://platform.openai.com/docs/mcp.
 // We do not expose any extra ones because ChatGPT has an undocumented "Safety Scan" feature.
 // In my experiments, if I included extra tools in the MCP server, ChatGPT would often - but not always -
@@ -157,6 +164,30 @@ func mcpFromSDK(sdkTool toolsdk.GenericTool, tb toolsdk.Deps) server.ServerTool 
 					mcp.NewTextContent(string(result)),
 				},
 			}, nil
+		},
+	}
+}
+
+// mcpPromptFromSDK adapts a toolsdk.Prompt to go-mcp's server.ServerPrompt.
+func mcpPromptFromSDK(sdkPrompt toolsdk.Prompt) server.ServerPrompt {
+	opts := []mcp.PromptOption{mcp.WithPromptDescription(sdkPrompt.Description)}
+	for _, arg := range sdkPrompt.Arguments {
+		argOpts := []mcp.ArgumentOption{mcp.ArgumentDescription(arg.Description)}
+		if arg.Required {
+			argOpts = append(argOpts, mcp.RequiredArgument())
+		}
+		opts = append(opts, mcp.WithArgument(arg.Name, argOpts...))
+	}
+	return server.ServerPrompt{
+		Prompt: mcp.NewPrompt(sdkPrompt.Name, opts...),
+		Handler: func(_ context.Context, request mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
+			text, err := sdkPrompt.Render(request.Params.Arguments)
+			if err != nil {
+				return nil, err
+			}
+			return mcp.NewGetPromptResult(sdkPrompt.Description, []mcp.PromptMessage{
+				mcp.NewPromptMessage(mcp.RoleUser, mcp.NewTextContent(text)),
+			}), nil
 		},
 	}
 }
