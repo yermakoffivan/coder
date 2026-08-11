@@ -3378,10 +3378,10 @@ func TestMigration000569MCPServerConfigsOrganizationID(t *testing.T) {
 	require.False(t, remapTriggerExists(t))
 }
 
-func TestMigration000570MCPServerConfigACL(t *testing.T) {
+func TestMigration000571MCPServerConfigACL(t *testing.T) {
 	t.Parallel()
 
-	const priorMigrationVersion = 569
+	const priorMigrationVersion = 570
 
 	sqlDB := testSQLDB(t)
 	next, err := migrations.Stepper(sqlDB)
@@ -3427,7 +3427,7 @@ func TestMigration000570MCPServerConfigACL(t *testing.T) {
 
 	version, _, err := next()
 	require.NoError(t, err)
-	require.EqualValues(t, 570, version)
+	require.EqualValues(t, 571, version)
 
 	for i, configID := range configIDs {
 		var displayName, description string
