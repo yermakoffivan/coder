@@ -3378,10 +3378,10 @@ func TestMigration000569MCPServerConfigsOrganizationID(t *testing.T) {
 	require.False(t, remapTriggerExists(t))
 }
 
-func TestMigration000569MCPServerConfigACL(t *testing.T) {
+func TestMigration000570MCPServerConfigACL(t *testing.T) {
 	t.Parallel()
 
-	const priorMigrationVersion = 568
+	const priorMigrationVersion = 569
 
 	sqlDB := testSQLDB(t)
 	next, err := migrations.Stepper(sqlDB)
@@ -3409,7 +3409,7 @@ func TestMigration000569MCPServerConfigACL(t *testing.T) {
 		INSERT INTO organizations (
 			id, name, display_name, description, icon, created_at, updated_at,
 			is_default, deleted, default_org_member_roles
-		) VALUES ($1, 'migration-569-org', 'Migration 569 Org', '', '', $2, $2, false, false, '{}')
+		) VALUES ($1, 'migration-570-org', 'Migration 570 Org', '', '', $2, $2, false, false, '{}')
 	`, orgID, now)
 	require.NoError(t, err)
 
@@ -3421,13 +3421,13 @@ func TestMigration000569MCPServerConfigACL(t *testing.T) {
 				id, organization_id, display_name, slug, description, url, auth_type,
 				availability, enabled, created_at, updated_at
 			) VALUES ($1, $2, $3, $4, 'unchanged', $5, 'none', 'default_on', true, $6, $6)
-		`, configID, orgIDs[i], fmt.Sprintf("Migration 569 Config %d", i), fmt.Sprintf("migration-569-config-%d", i), fmt.Sprintf("https://mcp.example.com/%d", i), now)
+		`, configID, orgIDs[i], fmt.Sprintf("Migration 570 Config %d", i), fmt.Sprintf("migration-570-config-%d", i), fmt.Sprintf("https://mcp.example.com/%d", i), now)
 		require.NoError(t, err)
 	}
 
 	version, _, err := next()
 	require.NoError(t, err)
-	require.EqualValues(t, 569, version)
+	require.EqualValues(t, 570, version)
 
 	for i, configID := range configIDs {
 		var displayName, description string
@@ -3438,7 +3438,7 @@ func TestMigration000569MCPServerConfigACL(t *testing.T) {
 			FROM mcp_server_configs WHERE id = $1
 		`, configID).Scan(&displayName, &description, &enabled, &groupACL, &userACL)
 		require.NoError(t, err)
-		require.Equal(t, fmt.Sprintf("Migration 569 Config %d", i), displayName)
+		require.Equal(t, fmt.Sprintf("Migration 570 Config %d", i), displayName)
 		require.Equal(t, "unchanged", description)
 		require.True(t, enabled)
 		require.JSONEq(t, fmt.Sprintf(`{%q:{"permissions":["read"]}}`, orgIDs[i].String()), groupACL)
