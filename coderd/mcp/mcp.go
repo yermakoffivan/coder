@@ -168,7 +168,6 @@ func mcpFromSDK(sdkTool toolsdk.GenericTool, tb toolsdk.Deps) server.ServerTool 
 	}
 }
 
-// mcpPromptFromSDK adapts a toolsdk.Prompt to go-mcp's server.ServerPrompt.
 func mcpPromptFromSDK(sdkPrompt toolsdk.Prompt) server.ServerPrompt {
 	opts := []mcp.PromptOption{mcp.WithPromptDescription(sdkPrompt.Description)}
 	for _, arg := range sdkPrompt.Arguments {

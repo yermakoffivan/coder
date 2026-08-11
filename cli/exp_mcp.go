@@ -754,8 +754,6 @@ func (s *mcpServer) startServer(ctx context.Context, inv *serpent.Invocation, in
 		mcpSrv.AddTools(mcpFromSDK(tool, toolDeps))
 	}
 
-	// The prompts guide the use of the chat tools, so register them only
-	// when those tools are available.
 	if s.client != nil && (len(allowedTools) == 0 || slices.Contains(allowedTools, toolsdk.ToolNameCreateChat)) {
 		for _, prompt := range toolsdk.AllPrompts {
 			mcpSrv.AddPrompts(mcpPromptFromSDK(prompt))
@@ -1035,7 +1033,6 @@ func mcpFromSDK(sdkTool toolsdk.GenericTool, tb toolsdk.Deps) server.ServerTool 
 	}
 }
 
-// mcpPromptFromSDK adapts a toolsdk.Prompt to go-mcp's server.ServerPrompt.
 func mcpPromptFromSDK(sdkPrompt toolsdk.Prompt) server.ServerPrompt {
 	opts := []mcp.PromptOption{mcp.WithPromptDescription(sdkPrompt.Description)}
 	for _, arg := range sdkPrompt.Arguments {
