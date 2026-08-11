@@ -3207,10 +3207,10 @@ func mustJSON(t *testing.T, v any) []byte {
 	return raw
 }
 
-func TestMigration000566ChatModelConfigOrgExplosion(t *testing.T) {
+func TestMigration000568ChatModelConfigOrgExplosion(t *testing.T) {
 	t.Parallel()
 
-	const previousMigrationVersion = 565
+	const previousMigrationVersion = 567
 
 	sqlDB := testSQLDB(t)
 	next, err := migrations.Stepper(sqlDB)
@@ -3402,7 +3402,7 @@ func TestMigration000566ChatModelConfigOrgExplosion(t *testing.T) {
 		)
 	}
 
-	upSQL, err := os.ReadFile("000566_chat_model_config_org_explosion.up.sql")
+	upSQL, err := os.ReadFile("000568_chat_model_config_org_explosion.up.sql")
 	require.NoError(t, err)
 	_, err = sqlDB.ExecContext(ctx, string(upSQL))
 	require.NoError(t, err)
@@ -3632,7 +3632,7 @@ func TestMigration000566ChatModelConfigOrgExplosion(t *testing.T) {
 		user1ID).Scan(&overrideValue))
 	require.Equal(t, "chat_default", overrideValue, "non-threshold keys are untouched")
 
-	downSQL, err := os.ReadFile("000566_chat_model_config_org_explosion.down.sql")
+	downSQL, err := os.ReadFile("000568_chat_model_config_org_explosion.down.sql")
 	require.NoError(t, err)
 	_, err = sqlDB.ExecContext(ctx, string(downSQL))
 	require.NoError(t, err)
@@ -3697,15 +3697,15 @@ func TestMigration000566ChatModelConfigOrgExplosion(t *testing.T) {
 	assertChatPinned(chatDID, c1ID, "re-up: orgD still untouched")
 }
 
-// TestMigration000566ChatModelConfigOrgExplosionExistingOrgDefault covers the
+// TestMigration000568ChatModelConfigOrgExplosionExistingOrgDefault covers the
 // case where a non-default organization already owns a live default config.
 // idx_chat_model_configs_single_default permits one live default per
 // organization, so the copy must give up is_default instead of aborting the
 // migration.
-func TestMigration000566ChatModelConfigOrgExplosionExistingOrgDefault(t *testing.T) {
+func TestMigration000568ChatModelConfigOrgExplosionExistingOrgDefault(t *testing.T) {
 	t.Parallel()
 
-	const previousMigrationVersion = 565
+	const previousMigrationVersion = 567
 
 	sqlDB := testSQLDB(t)
 	next, err := migrations.Stepper(sqlDB)
@@ -3766,7 +3766,7 @@ func TestMigration000566ChatModelConfigOrgExplosionExistingOrgDefault(t *testing
 	// A live default config that a deployment created manually in orgE.
 	insertConfig(orgOwnDefaultID, orgEID, "gpt-5.2-org-own", true)
 
-	upSQL, err := os.ReadFile("000566_chat_model_config_org_explosion.up.sql")
+	upSQL, err := os.ReadFile("000568_chat_model_config_org_explosion.up.sql")
 	require.NoError(t, err)
 	_, err = sqlDB.ExecContext(ctx, string(upSQL))
 	require.NoError(t, err, "the fan-out must not violate the single-default index")
@@ -3798,7 +3798,7 @@ func TestMigration000566ChatModelConfigOrgExplosionExistingOrgDefault(t *testing
 		WHERE organization_id = $1 AND is_default AND NOT deleted`, defaultOrgID).Scan(&defaultOrgDefaultID))
 	require.Equal(t, defaultConfigID, defaultOrgDefaultID, "the default organization keeps its default config")
 
-	downSQL, err := os.ReadFile("000566_chat_model_config_org_explosion.down.sql")
+	downSQL, err := os.ReadFile("000568_chat_model_config_org_explosion.down.sql")
 	require.NoError(t, err)
 	_, err = sqlDB.ExecContext(ctx, string(downSQL))
 	require.NoError(t, err)
@@ -3811,15 +3811,15 @@ func TestMigration000566ChatModelConfigOrgExplosionExistingOrgDefault(t *testing
 	require.Equal(t, 2, countConfigs(defaultOrgID), "down: the default organization is unchanged")
 }
 
-// TestMigration000566ChatModelConfigOrgExplosionDuplicateRollback covers a
+// TestMigration000568ChatModelConfigOrgExplosionDuplicateRollback covers a
 // default organization that holds several configs with the same provider and
 // model. The rollback must restore each reference to a config with the
 // original options and context limit, so it matches on every field that the
 // up migration copies verbatim and pairs duplicates by rank.
-func TestMigration000566ChatModelConfigOrgExplosionDuplicateRollback(t *testing.T) {
+func TestMigration000568ChatModelConfigOrgExplosionDuplicateRollback(t *testing.T) {
 	t.Parallel()
 
-	const previousMigrationVersion = 565
+	const previousMigrationVersion = 567
 
 	sqlDB := testSQLDB(t)
 	next, err := migrations.Stepper(sqlDB)
@@ -3912,7 +3912,7 @@ func TestMigration000566ChatModelConfigOrgExplosionDuplicateRollback(t *testing.
 		)
 	}
 
-	upSQL, err := os.ReadFile("000566_chat_model_config_org_explosion.up.sql")
+	upSQL, err := os.ReadFile("000568_chat_model_config_org_explosion.up.sql")
 	require.NoError(t, err)
 	_, err = sqlDB.ExecContext(ctx, string(upSQL))
 	require.NoError(t, err)
@@ -3941,7 +3941,7 @@ func TestMigration000566ChatModelConfigOrgExplosionDuplicateRollback(t *testing.
 	require.Equal(t, orgFID, twinOrgID)
 	require.Equal(t, 128000, twinLimit)
 
-	downSQL, err := os.ReadFile("000566_chat_model_config_org_explosion.down.sql")
+	downSQL, err := os.ReadFile("000568_chat_model_config_org_explosion.down.sql")
 	require.NoError(t, err)
 	_, err = sqlDB.ExecContext(ctx, string(downSQL))
 	require.NoError(t, err)

@@ -1,4 +1,4 @@
--- Fixture for 000566 (org explosion cutover). Fixtures apply right after
+-- Fixture for 000568 (org explosion cutover). Fixtures apply right after
 -- their migration runs, so this executes after the explosion has copied
 -- the default organization's configs into every live organization. It
 -- seeds one organically created config in the non-default organization
