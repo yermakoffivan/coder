@@ -1135,7 +1135,7 @@ export const MCPServersLoadingDisablesSend: Story = {
 	},
 	play: async ({ canvasElement }) => {
 		const canvas = within(canvasElement);
-		const input = canvas.getByTestId("chat-message-input");
+		const input = canvas.getByRole("textbox");
 		await userEvent.click(input);
 		await userEvent.keyboard("send while MCP servers load");
 		expect(canvas.getByRole("button", { name: "Send" })).toBeDisabled();
@@ -1170,7 +1170,7 @@ export const MCPServersRefetchErrorKeepsSendEnabled: Story = {
 	},
 	play: async ({ canvasElement }) => {
 		const canvas = within(canvasElement);
-		const input = canvas.getByTestId("chat-message-input");
+		const input = canvas.getByRole("textbox");
 		await userEvent.click(input);
 		await userEvent.keyboard("send after a failed refetch");
 		const send = canvas.getByRole("button", { name: "Send" });
