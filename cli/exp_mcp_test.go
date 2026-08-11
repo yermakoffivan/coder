@@ -102,6 +102,20 @@ func TestExpMcpServer(t *testing.T) {
 		assert.True(t, *annotations.IdempotentHint)
 		assert.False(t, *annotations.OpenWorldHint)
 
+		// Prompts reference chat tools, which are excluded by this
+		// allowlist, so none may be advertised. With no prompts
+		// registered the server rejects prompts/list entirely.
+		stdin.WriteLine(`{"jsonrpc":"2.0","id":5,"method":"prompts/list"}`)
+		promptsOutput := stdout.ReadLine(ctx)
+		var promptsResponse struct {
+			Error *struct {
+				Code int `json:"code"`
+			} `json:"error"`
+		}
+		err = json.Unmarshal([]byte(promptsOutput), &promptsResponse)
+		require.NoError(t, err)
+		require.NotNil(t, promptsResponse.Error, "prompts/list should fail when no prompts are registered")
+
 		// Call the tool and ensure it works.
 		toolPayload := `{"jsonrpc":"2.0","id":3,"method":"tools/call", "params": {"name": "coder_get_authenticated_user", "arguments": {}}}`
 		stdin.WriteLine(toolPayload)

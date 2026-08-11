@@ -731,6 +731,7 @@ func (s *mcpServer) startServer(ctx context.Context, inv *serpent.Invocation, in
 	}
 
 	// Register tools based on the allowlist.  Zero length means allow everything.
+	registeredTools := make(map[string]bool, len(toolsdk.All))
 	for _, tool := range toolsdk.All {
 		// Skip if not allowed.
 		if len(allowedTools) > 0 && !slices.ContainsFunc(allowedTools, func(t string) bool {
@@ -752,12 +753,18 @@ func (s *mcpServer) startServer(ctx context.Context, inv *serpent.Invocation, in
 		}
 
 		mcpSrv.AddTools(mcpFromSDK(tool, toolDeps))
+		registeredTools[tool.Tool.Name] = true
 	}
 
-	if s.client != nil && (len(allowedTools) == 0 || slices.Contains(allowedTools, toolsdk.ToolNameCreateChat)) {
-		for _, prompt := range toolsdk.AllPrompts {
-			mcpSrv.AddPrompts(mcpPromptFromSDK(prompt))
+	// Skip prompts whose referenced tools are unavailable so clients are
+	// not offered workflows they cannot run.
+	for _, prompt := range toolsdk.AllPrompts {
+		if slices.ContainsFunc(prompt.RequiredTools, func(name string) bool {
+			return !registeredTools[name]
+		}) {
+			continue
 		}
+		mcpSrv.AddPrompts(mcpPromptFromSDK(prompt))
 	}
 
 	srv := server.NewStdioServer(mcpSrv)
