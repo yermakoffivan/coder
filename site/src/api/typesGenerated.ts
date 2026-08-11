@@ -5907,12 +5907,19 @@ export interface MCPServerConfig {
 }
 
 // From codersdk/mcp.go
+/**
+ * MCPServerConfigACL is the resolved access control list of an MCP server
+ * config.
+ */
 export interface MCPServerConfigACL {
 	readonly users: readonly MCPServerConfigUser[];
 	readonly groups: readonly MCPServerConfigGroup[];
 }
 
 // From codersdk/mcp.go
+/**
+ * MCPServerConfigGroup is a group entry in an MCP server config ACL.
+ */
 export interface MCPServerConfigGroup extends Group {
 	readonly role: MCPServerConfigRole;
 }
@@ -5923,6 +5930,9 @@ export type MCPServerConfigRole = "" | "read";
 export const MCPServerConfigRoles: MCPServerConfigRole[] = ["", "read"];
 
 // From codersdk/mcp.go
+/**
+ * MCPServerConfigUser is a user entry in an MCP server config ACL.
+ */
 export interface MCPServerConfigUser extends MinimalUser {
 	readonly role: MCPServerConfigRole;
 }
@@ -9682,6 +9692,11 @@ export interface UpdateInboxNotificationReadStatusResponse {
 }
 
 // From codersdk/mcp.go
+/**
+ * UpdateMCPServerConfigACLRequest is a sparse update of an MCP server
+ * config ACL: only the listed principals change, and
+ * MCPServerConfigRoleDeleted removes an entry.
+ */
 export interface UpdateMCPServerConfigACLRequest {
 	readonly user_roles?: Record<string, MCPServerConfigRole>;
 	readonly group_roles?: Record<string, MCPServerConfigRole>;
