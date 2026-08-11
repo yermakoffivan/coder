@@ -2,7 +2,6 @@ package chatd
 
 import (
 	"context"
-	"encoding/json"
 	"slices"
 	"strings"
 	"sync"
@@ -83,17 +82,9 @@ func (server *Server) prepareGeneration(
 	)
 
 	var (
-		model            chatprovider.Model
-		modelConfig      database.ChatModelConfig
-		modelRoute       aiGatewayModelRoute
-		modelOpts        modelBuildOptions
-		callConfig       codersdk.ChatModelCallConfig
-		promptRows       []database.ChatMessage
-		mcpConfigs       []database.MCPServerConfig
-		mcpTokens        []database.MCPServerUserToken
-		debugEnabled     bool
-		resolvedProvider string
-		debugModel       string
+		promptRows []database.ChatMessage
+		mcpConfigs []database.MCPServerConfig
+		mcpTokens  []database.MCPServerUserToken
 	)
 
 	var g errgroup.Group
@@ -118,21 +109,11 @@ func (server *Server) prepareGeneration(
 	if err != nil {
 		return generationPrepared{}, xerrors.Errorf("ensure synthetic API key: %w", err)
 	}
-	modelOpts = modelBuildOptions{ActiveAPIKeyID: apiKeyID}
+	modelOpts := modelBuildOptions{ActiveAPIKeyID: apiKeyID}
 
-	model, modelConfig, modelRoute, debugEnabled, resolvedProvider, debugModel, err = server.resolveChatModel(ctx, chat, modelOpts)
+	resolved, err := server.resolveModelCall(ctx, standardTurnSpec(chat, modelOpts))
 	if err != nil {
 		return generationPrepared{}, err
-	}
-	if len(modelConfig.Options) > 0 {
-		if err := json.Unmarshal(modelConfig.Options, &callConfig); err != nil {
-			return generationPrepared{}, xerrors.Errorf("parse model call config: %w", err)
-		}
-	}
-
-	if callConfig.MaxOutputTokens == nil {
-		maxOutputTokens := int64(32_000)
-		callConfig.MaxOutputTokens = &maxOutputTokens
 	}
 
 	// Computer-use turns swap in a specialized model, so the substitution
@@ -147,28 +128,31 @@ func (server *Server) prepareGeneration(
 		if err != nil {
 			return generationPrepared{}, xerrors.Errorf("resolve computer use provider and model: %w", err)
 		}
-		computerUseRoute, keyErr := server.resolveModelRouteForProviderType(ctx, chat.OwnerID, cuModelProvider)
-		if keyErr != nil {
-			return generationPrepared{}, xerrors.Errorf("resolve computer use provider route: %w", keyErr)
-		}
-		modelRoute = computerUseRoute
-		cuModel, cuDebugEnabled, cuResolvedProvider, cuResolvedModel, cuErr := server.resolveComputerUseModel(
-			ctx,
+		cuResolved, cuErr := server.resolveModelCall(ctx, computerUseSpec(
 			chat,
-			computerUseRoute,
-			computerUseProvider,
 			cuModelProvider,
 			cuModelName,
+			resolved.callConfig,
 			modelOpts,
-		)
+		))
 		if cuErr != nil {
-			return generationPrepared{}, cuErr
+			return generationPrepared{}, xerrors.Errorf(
+				"resolve computer use model for provider %q model %q: %w",
+				computerUseProvider,
+				cuModelName,
+				cuErr,
+			)
 		}
-		model = cuModel
-		debugEnabled = cuDebugEnabled
-		resolvedProvider = cuResolvedProvider
-		debugModel = cuResolvedModel
+		// The chat model's config row keeps driving compaction, history
+		// sanitization, and debug attribution; only the client and its
+		// call identity are swapped.
+		cuResolved.dbConfig = resolved.dbConfig
+		resolved = cuResolved
 	}
+	model := resolved.model
+	modelConfig := resolved.dbConfig
+	callConfig := resolved.callConfig
+	modelRoute := resolved.route
 
 	currentPlanMode := chat.PlanMode
 	isPlanModeTurn := currentPlanMode.Valid && currentPlanMode.ChatPlanMode == database.ChatPlanModePlan
@@ -580,12 +564,6 @@ func (server *Server) prepareGeneration(
 		}
 	}
 
-	var requestedEffort *string
-	if chat.LastReasoningEffort.Valid {
-		requestedEffort = new(string(chat.LastReasoningEffort.ChatReasoningEffort))
-	}
-	providerOptions := chatprovider.ProviderOptionsForCall(model, callConfig, requestedEffort)
-
 	activeToolNames := activeToolNamesForTurn(tools, currentPlanMode, chat.ParentChatID, approvedPlanMCPConfigIDs)
 	if isExploreSubagent {
 		activeToolNames = allowedExploreToolNames(tools)
@@ -601,7 +579,7 @@ func (server *Server) prepareGeneration(
 	triggerMessageID, historyTipMessageID, triggerLabel := deriveChatDebugSeed(promptRows)
 	debugSvc := server.existingDebugService()
 	var debug *generationDebug
-	if debugEnabled {
+	if resolved.debugEnabled {
 		if debugSvc == nil {
 			cleanup()
 			return generationPrepared{}, xerrors.New("chat debug service missing after enablement check")
@@ -609,8 +587,8 @@ func (server *Server) prepareGeneration(
 		debug = &generationDebug{
 			Enabled:             true,
 			Service:             debugSvc,
-			Provider:            resolvedProvider,
-			Model:               debugModel,
+			Provider:            resolved.resolvedProvider,
+			Model:               resolved.resolvedModel,
 			TriggerMessageID:    triggerMessageID,
 			HistoryTipMessageID: historyTipMessageID,
 			TriggerLabel:        triggerLabel,
@@ -653,8 +631,8 @@ func (server *Server) prepareGeneration(
 		DebugSvc:             debugSvc,
 		ChatID:               chat.ID,
 		HistoryTipMessageID:  historyTipMessageID,
-		ResolvedProvider:     resolvedProvider,
-		ResolvedModel:        debugModel,
+		ResolvedProvider:     resolved.resolvedProvider,
+		ResolvedModel:        resolved.resolvedModel,
 		ModelConfigID:        modelConfig.ID,
 		StepUsage:            compactionStepUsage,
 	}
@@ -678,10 +656,10 @@ func (server *Server) prepareGeneration(
 		ProviderTools:        providerTools,
 		ModelRoute:           modelRoute,
 		ModelBuildOptions:    modelOpts,
-		ResolvedProvider:     resolvedProvider,
+		ResolvedProvider:     resolved.resolvedProvider,
 		ModelConfigID:        modelConfig.ID,
 		ModelConfig:          callConfig,
-		ProviderOptions:      providerOptions,
+		ProviderOptions:      resolved.providerOptions,
 		ContextLimitFallback: modelConfig.ContextLimit,
 		DynamicToolNames:     dynamicToolNames,
 		StopAfterTools:       stopAfterBehaviorTools(currentPlanMode, chat.Mode, chat.ParentChatID),
