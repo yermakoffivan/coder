@@ -1,4 +1,6 @@
-# Deploy AI Gateway as a standalone service
+---
+title: Deploy AI Gateway as a standalone service
+---
 
 > [!NOTE]
 > AI Gateway requires the [AI Governance Add-On](../ai-governance.md).

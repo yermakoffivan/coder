@@ -1,4 +1,6 @@
-# Migrating from the Tasks API to the Chats API
+---
+title: Migrating from the Tasks API to the Chats API
+---
 
 The [Tasks API](../../reference/api/tasks.md) (`/api/v2/tasks`) and the
 [Chats API](../../reference/api/chats.md) (`/api/v2/chats`) serve similar

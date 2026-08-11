@@ -1,4 +1,6 @@
-# Migrating Task Templates for Coder version 2.28.0
+---
+title: Migrating Task Templates for Coder version 2.28.0
+---
 
 > [!WARNING]
 > Starting June 2, 2026, Coder Tasks will move to a 12-month Extended Support Release (ESR) for Premium customers.

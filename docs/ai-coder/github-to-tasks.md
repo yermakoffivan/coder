@@ -1,4 +1,6 @@
-# Guide: Create a GitHub to Coder Tasks Workflow
+---
+title: "Guide: Create a GitHub to Coder Tasks Workflow"
+---
 
 > [!WARNING]
 > Starting June 2, 2026, Coder Tasks will move to a 12-month Extended Support Release (ESR) for Premium customers.
