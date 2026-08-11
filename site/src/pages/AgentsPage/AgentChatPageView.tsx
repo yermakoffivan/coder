@@ -829,7 +829,6 @@ export const AgentChatPageView: FC<AgentChatPageViewProps> = ({
 		? `This chat is owned by ${chatOwnerLabel}. It is read-only.`
 		: undefined;
 
-	const isQueuedForCapacity = queuedForCapacity === true;
 	const hasLicense = entitlements.has_license;
 	const canManageLicenses = permissions.viewAllLicenses;
 	const runtimeHours = entitlements.features.agent_runtime_hours;
@@ -962,7 +961,7 @@ export const AgentChatPageView: FC<AgentChatPageViewProps> = ({
 											: canSendAskUserQuestionResponse
 									}
 									queuedForCapacity={
-										isQueuedForCapacity
+										queuedForCapacity
 											? {
 													hasLicense,
 													canManageLicenses,
