@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { delay } from "msw";
 import {
 	expect,
 	fn,
@@ -9,6 +10,7 @@ import {
 	within,
 } from "storybook/test";
 import { API } from "#/api/api";
+import { permittedOrganizations } from "#/api/queries/organizations";
 import type * as TypesGen from "#/api/typesGenerated";
 import { ConfirmDialog } from "#/components/Dialog/ConfirmDialog/ConfirmDialog";
 import { MockChatModelConfig } from "#/testHelpers/chatModels";
@@ -22,14 +24,12 @@ import {
 	getReasoningEffortForModel,
 	saveReasoningEffortForModel,
 } from "../utils/reasoningEffort";
-import { AgentCreateForm } from "./AgentCreateForm";
+import { AgentCreateForm, emptyInputStorageKey } from "./AgentCreateForm";
 
-// Query key used by permittedOrganizations() in the form.
-const permittedOrgsKey = [
-	"organizations",
-	"permitted",
-	{ object: { resource_type: "chat" }, action: "create" },
-];
+const chatCreateOrganizationsQuery = permittedOrganizations({
+	object: { resource_type: "chat" },
+	action: "create",
+});
 
 const modelConfigID = "model-config-1";
 const claudeModelConfigID = "model-config-claude";
@@ -132,19 +132,27 @@ type Story = StoryObj<typeof AgentCreateForm>;
 
 const defaultArgs = meta.args;
 
-const mockPermittedOrganizations = (permissions: Record<string, boolean>) => {
+const mockPermittedOrganizations = (
+	permissions: Record<string, boolean>,
+	delayMs = 0,
+) => {
 	spyOn(API, "getOrganizations").mockResolvedValue([
 		MockDefaultOrganization,
 		MockOrganization2,
 	]);
-	spyOn(API, "checkAuthorization").mockResolvedValue(permissions);
+	spyOn(API, "checkAuthorization").mockImplementation(async () => {
+		if (delayMs > 0) {
+			await delay(delayMs);
+		}
+		return permissions;
+	});
 };
 
 export const Default: Story = {};
 
 const submitMessage = async (canvasElement: HTMLElement, message: string) => {
 	const canvas = within(canvasElement);
-	const input = canvas.getByTestId("chat-message-input");
+	const input = canvas.getByRole("textbox", { name: "Chat message" });
 	await userEvent.click(input);
 	await userEvent.keyboard(message);
 	await userEvent.click(canvas.getByRole("button", { name: "Send" }));
@@ -895,25 +903,76 @@ export const WithOrganizationPicker: Story = {
 		organizations: [MockDefaultOrganization, MockOrganization2],
 		queries: [
 			{
-				key: permittedOrgsKey,
-				data: [MockDefaultOrganization, MockOrganization2],
+				key: chatCreateOrganizationsQuery.queryKey,
+				data: [MockOrganization2, MockDefaultOrganization],
 			},
 		],
 	},
 	play: async ({ canvasElement }) => {
 		const canvas = within(canvasElement);
-		// Verify the org picker rendered (component didn't crash).
-		await waitFor(() => {
-			expect(canvas.getByTestId("compact-org-selector")).toBeInTheDocument();
+		const organizationPicker = canvas.getByRole("button", {
+			name: "Organization: My Organization",
 		});
-		// Type into the chat input to trigger re-renders. If the
-		// permittedOrgs fallback is referentially unstable, this
-		// causes a render cascade that hits React's update limit.
-		const input = canvas.getByTestId("chat-message-input");
+		await expect(organizationPicker).toBeVisible();
+
+		const input = canvas.getByRole("textbox", { name: "Chat message" });
 		await userEvent.click(input);
 		await userEvent.keyboard("hello world");
-		// The org picker should still be present after typing.
-		expect(canvas.getByTestId("compact-org-selector")).toBeInTheDocument();
+		await expect(
+			canvas.getByRole("button", {
+				name: "Organization: My Organization",
+			}),
+		).toBeVisible();
+	},
+};
+
+export const RestrictedMultiOrganizationUser: Story = {
+	parameters: {
+		showOrganizations: true,
+		organizations: [MockDefaultOrganization, MockOrganization2],
+		queries: [
+			{
+				key: chatCreateOrganizationsQuery.queryKey,
+				data: [MockOrganization2],
+			},
+		],
+	},
+	args: {
+		...defaultArgs,
+		onCreateChat: fn().mockResolvedValue(undefined),
+	},
+	play: async ({ canvasElement, args }) => {
+		await submitMessage(canvasElement, "test message");
+		await waitFor(() => {
+			expect(args.onCreateChat).toHaveBeenCalledWith(
+				expect.objectContaining({
+					organizationId: MockOrganization2.id,
+				}),
+			);
+		});
+	},
+};
+
+export const DelayedOrganizationAuthorization: Story = {
+	parameters: {
+		showOrganizations: true,
+		organizations: [MockDefaultOrganization, MockOrganization2],
+	},
+	beforeEach: () => {
+		localStorage.setItem(emptyInputStorageKey, "draft message");
+		mockPermittedOrganizations(
+			{
+				[MockDefaultOrganization.id]: true,
+				[MockOrganization2.id]: true,
+			},
+			1_500,
+		);
+	},
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		const sendButton = canvas.getByRole("button", { name: "Send" });
+		await expect(sendButton).toBeDisabled();
+		await waitFor(() => expect(sendButton).toBeEnabled(), { timeout: 3_000 });
 	},
 };
 
@@ -923,7 +982,7 @@ export const OrgPickerTightSpacing: Story = {
 		organizations: [MockDefaultOrganization, MockOrganization2],
 		queries: [
 			{
-				key: permittedOrgsKey,
+				key: chatCreateOrganizationsQuery.queryKey,
 				data: [MockDefaultOrganization, MockOrganization2],
 			},
 		],
@@ -1009,8 +1068,6 @@ export const PermittedOrgsResolvesToEmpty: Story = {
 	parameters: {
 		showOrganizations: true,
 		organizations: [MockDefaultOrganization, MockOrganization2],
-		// Deliberately do not pre-seed permittedOrgsKey. Let the
-		// mocked API calls drive the async permission resolution.
 	},
 	args: {
 		...defaultArgs,
