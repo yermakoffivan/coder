@@ -918,6 +918,7 @@ inserted AS (
         id,
         chat_id,
         created_by,
+        client_message_id,
         model_config_id,
         reasoning_effort,
         role,
@@ -938,6 +939,7 @@ inserted AS (
         allocated.id,
         @chat_id::uuid,
         NULLIF((@created_by::uuid[])[allocated.ord], '00000000-0000-0000-0000-000000000000'::uuid),
+        NULLIF((@client_message_id::uuid[])[allocated.ord], '00000000-0000-0000-0000-000000000000'::uuid),
         NULLIF((@model_config_id::uuid[])[allocated.ord], '00000000-0000-0000-0000-000000000000'::uuid),
         NULLIF((@reasoning_effort::text[])[allocated.ord], '')::chat_reasoning_effort,
         (@role::chat_message_role[])[allocated.ord],
@@ -1915,10 +1917,11 @@ RETURNING
 -- Legacy queue insertion path. When no caller-supplied creator exists,
 -- preserve the created_by invariant by attributing the queued row to the
 -- chat owner.
-INSERT INTO chat_queued_messages (chat_id, content, model_config_id, reasoning_effort, created_by)
+INSERT INTO chat_queued_messages (chat_id, content, client_message_id, model_config_id, reasoning_effort, created_by)
 SELECT
     @chat_id::uuid,
     @content::jsonb,
+    sqlc.narg('client_message_id')::uuid,
     sqlc.narg('model_config_id')::uuid,
     sqlc.narg('reasoning_effort')::chat_reasoning_effort,
     chats.owner_id
@@ -2625,10 +2628,11 @@ SELECT NOW()::timestamptz AS now;
 -- Inserts a queued message that carries a position (from the default
 -- sequence) and an explicit created_by reference. Use this when the
 -- queued-message creator differs from the chat owner.
-INSERT INTO chat_queued_messages (chat_id, content, model_config_id, reasoning_effort, created_by)
+INSERT INTO chat_queued_messages (chat_id, content, client_message_id, model_config_id, reasoning_effort, created_by)
 VALUES (
     @chat_id::uuid,
     @content::jsonb,
+    sqlc.narg('client_message_id')::uuid,
     sqlc.narg('model_config_id')::uuid,
     sqlc.narg('reasoning_effort')::chat_reasoning_effort,
     @created_by::uuid
@@ -2640,6 +2644,20 @@ RETURNING *;
 SELECT * FROM chat_queued_messages
 WHERE chat_id = @chat_id::uuid
 ORDER BY position ASC, id ASC;
+
+-- name: ChatClientMessageIDExists :one
+SELECT EXISTS (
+    SELECT 1
+    FROM chat_messages
+    WHERE chat_id = @chat_id::uuid
+      AND client_message_id = @client_message_id::uuid
+      AND deleted = false
+    UNION ALL
+    SELECT 1
+    FROM chat_queued_messages
+    WHERE chat_id = @chat_id::uuid
+      AND client_message_id = @client_message_id::uuid
+) AS exists;
 
 -- name: CountChatQueuedMessages :one
 -- Cheap queue-length check used by ChatMachine.Update when deciding

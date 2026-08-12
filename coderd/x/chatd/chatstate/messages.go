@@ -24,6 +24,7 @@ type Message struct {
 	ModelConfigID       uuid.NullUUID
 	ReasoningEffort     database.NullChatReasoningEffort
 	CreatedBy           uuid.NullUUID
+	ClientMessageID     uuid.NullUUID
 	ContentVersion      int16
 	Compressed          bool
 	InputTokens         sql.NullInt64
@@ -47,6 +48,7 @@ func toInsertParams(chatID uuid.UUID, messages []Message) database.InsertChatMes
 	params := database.InsertChatMessagesParams{
 		ChatID:              chatID,
 		CreatedBy:           make([]uuid.UUID, n),
+		ClientMessageID:     make([]uuid.UUID, n),
 		ModelConfigID:       make([]uuid.UUID, n),
 		ReasoningEffort:     make([]string, n),
 		Role:                make([]database.ChatMessageRole, n),
@@ -65,6 +67,7 @@ func toInsertParams(chatID uuid.UUID, messages []Message) database.InsertChatMes
 	}
 	for i, m := range messages {
 		params.CreatedBy[i] = nullUUIDOrNil(m.CreatedBy)
+		params.ClientMessageID[i] = nullUUIDOrNil(m.ClientMessageID)
 		params.ModelConfigID[i] = nullUUIDOrNil(m.ModelConfigID)
 		if m.ReasoningEffort.Valid {
 			params.ReasoningEffort[i] = string(m.ReasoningEffort.ChatReasoningEffort)

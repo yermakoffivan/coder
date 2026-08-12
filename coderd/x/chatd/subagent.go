@@ -1368,7 +1368,7 @@ func (p *Server) createChildSubagentChatWithOptions(
 	// workspace context the same way a top-level chat does: pinned from the
 	// agent's latest snapshot (see hydrateChatContextOnCreate below). The
 	// parent's context is not copied into child history.
-	initialMessages = append(initialMessages, userMessage(userContent, modelConfigID, parent.OwnerID, opts.reasoningEffortOverride))
+	initialMessages = append(initialMessages, userMessage(userContent, modelConfigID, parent.OwnerID, nil, opts.reasoningEffortOverride))
 
 	publisher := p.pubsub
 	if publisher == nil {

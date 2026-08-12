@@ -127,6 +127,7 @@ func ChatMessage(t testing.TB, db database.Store, seed database.ChatMessage) dat
 	msgs, err := db.InsertChatMessages(genCtx, database.InsertChatMessagesParams{
 		ChatID:              seed.ChatID,
 		CreatedBy:           []uuid.UUID{seed.CreatedBy.UUID},
+		ClientMessageID:     []uuid.UUID{seed.ClientMessageID.UUID},
 		ModelConfigID:       []uuid.UUID{seed.ModelConfigID.UUID},
 		ReasoningEffort:     []string{string(seed.ReasoningEffort.ChatReasoningEffort)},
 		Role:                []database.ChatMessageRole{role},

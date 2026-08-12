@@ -1,6 +1,27 @@
 import type * as TypesGen from "#/api/typesGenerated";
 import type { ReconnectSchedule } from "#/utils/reconnectingWebSocket";
 
+export type OptimisticUserMessage = Omit<TypesGen.ChatMessage, "id"> & {
+	readonly id?: never;
+	readonly client_message_id: string;
+	readonly role: "user";
+};
+
+export type RenderableChatMessage =
+	| TypesGen.ChatMessage
+	| OptimisticUserMessage;
+
+export const isDurableChatMessage = (
+	message: RenderableChatMessage,
+): message is TypesGen.ChatMessage => "id" in message;
+
+export const getChatMessageRenderKey = (
+	message: RenderableChatMessage,
+): string =>
+	isDurableChatMessage(message) && !message.client_message_id
+		? `message:${message.id}`
+		: `client-message:${message.client_message_id}`;
+
 export type ParsedToolCall = {
 	id: string;
 	name: string;
@@ -65,7 +86,7 @@ export type ParsedMessageContent = {
 };
 
 export type ParsedMessageEntry = {
-	message: TypesGen.ChatMessage;
+	message: RenderableChatMessage;
 	parsed: ParsedMessageContent;
 };
 

@@ -256,6 +256,23 @@ func (tx *Tx) requireQueueCapacity() error {
 	return nil
 }
 
+func (tx *Tx) requireUniqueClientMessageID(id uuid.NullUUID) error {
+	if !id.Valid {
+		return nil
+	}
+	exists, err := tx.store.ChatClientMessageIDExists(tx.ctx, database.ChatClientMessageIDExistsParams{
+		ChatID:          tx.chatID,
+		ClientMessageID: id.UUID,
+	})
+	if err != nil {
+		return xerrors.Errorf("check client message ID: %w", err)
+	}
+	if exists {
+		return &DuplicateClientMessageIDError{ClientMessageID: id.UUID}
+	}
+	return nil
+}
+
 // insertQueuedMessage inserts a queued user message. created_by falls
 // back to chats.owner_id only when the message does not supply one.
 func (tx *Tx) insertQueuedMessage(ownerFallback uuid.UUID, m Message) (database.ChatQueuedMessage, error) {
@@ -273,6 +290,7 @@ func (tx *Tx) insertQueuedMessage(ownerFallback uuid.UUID, m Message) (database.
 	return tx.store.InsertChatQueuedMessageWithCreator(tx.ctx, database.InsertChatQueuedMessageWithCreatorParams{
 		ChatID:          tx.chatID,
 		Content:         rawContent,
+		ClientMessageID: m.ClientMessageID,
 		ModelConfigID:   m.ModelConfigID,
 		ReasoningEffort: m.ReasoningEffort,
 		CreatedBy:       createdBy,
@@ -289,6 +307,7 @@ func messageFromQueuedRow(q database.ChatQueuedMessage) Message {
 		ModelConfigID:   q.ModelConfigID,
 		ReasoningEffort: q.ReasoningEffort,
 		CreatedBy:       uuid.NullUUID{UUID: q.CreatedBy, Valid: true},
+		ClientMessageID: q.ClientMessageID,
 		ContentVersion:  chatprompt.CurrentContentVersion,
 	}
 }
@@ -367,6 +386,9 @@ func (tx *Tx) SendMessage(input SendMessageInput) (SendMessageResult, error) {
 			TransitionSendMessage, from,
 			"SendMessage requires a user message",
 		)
+	}
+	if err := tx.requireUniqueClientMessageID(input.Message.ClientMessageID); err != nil {
+		return SendMessageResult{}, err
 	}
 	switch input.BusyBehavior {
 	case BusyBehaviorQueue, BusyBehaviorInterrupt:

@@ -2617,6 +2617,7 @@ export interface ChatMessage {
 	readonly id: number;
 	readonly chat_id: string;
 	readonly created_by?: string;
+	readonly client_message_id?: string;
 	readonly model_config_id?: string;
 	readonly created_at: string;
 	readonly role: ChatMessageRole;
@@ -3226,6 +3227,7 @@ export const ChatProviderConfigSources: ChatProviderConfigSource[] = [
 export interface ChatQueuedMessage {
 	readonly id: number;
 	readonly chat_id: string;
+	readonly client_message_id?: string;
 	readonly model_config_id?: string;
 	readonly content: readonly ChatMessagePart[];
 	readonly created_at: string;
@@ -3774,6 +3776,7 @@ export interface CreateAIProviderRequest {
  */
 export interface CreateChatMessageRequest {
 	readonly content: readonly ChatInputPart[];
+	readonly client_message_id?: string;
 	readonly model_config_id?: string;
 	readonly mcp_server_ids?: string[];
 	readonly busy_behavior?: ChatBusyBehavior;

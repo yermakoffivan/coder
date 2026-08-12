@@ -1974,7 +1974,8 @@ CREATE TABLE chat_messages (
     provider_response_id text,
     revision bigint NOT NULL,
     reasoning_effort chat_reasoning_effort,
-    search_tsv tsvector
+    search_tsv tsvector,
+    client_message_id uuid
 );
 
 COMMENT ON COLUMN chat_messages.reasoning_effort IS 'Stores the selected effort for the turn triggered by this message.';
@@ -2026,7 +2027,8 @@ CREATE TABLE chat_queued_messages (
     model_config_id uuid,
     "position" bigint DEFAULT nextval('chat_queued_messages_position_seq'::regclass) NOT NULL,
     created_by uuid NOT NULL,
-    reasoning_effort chat_reasoning_effort
+    reasoning_effort chat_reasoning_effort,
+    client_message_id uuid
 );
 
 COMMENT ON COLUMN chat_queued_messages.reasoning_effort IS 'Stores the selected effort until the queued row is promoted.';
@@ -4787,6 +4789,8 @@ CREATE INDEX idx_chat_files_owner ON chat_files USING btree (owner_id);
 
 CREATE INDEX idx_chat_messages_chat ON chat_messages USING btree (chat_id);
 
+CREATE UNIQUE INDEX idx_chat_messages_chat_client_message_id ON chat_messages USING btree (chat_id, client_message_id) WHERE ((client_message_id IS NOT NULL) AND (deleted = false));
+
 CREATE INDEX idx_chat_messages_chat_created ON chat_messages USING btree (chat_id, created_at);
 
 CREATE INDEX idx_chat_messages_chat_role_id ON chat_messages USING btree (chat_id, role, id DESC) WHERE (deleted = false);
@@ -4810,6 +4814,8 @@ CREATE INDEX idx_chat_model_configs_ai_provider_id ON chat_model_configs USING b
 CREATE INDEX idx_chat_model_configs_enabled ON chat_model_configs USING btree (enabled);
 
 CREATE UNIQUE INDEX idx_chat_model_configs_single_default ON chat_model_configs USING btree ((1)) WHERE ((is_default = true) AND (deleted = false));
+
+CREATE UNIQUE INDEX idx_chat_queued_messages_chat_client_message_id ON chat_queued_messages USING btree (chat_id, client_message_id) WHERE (client_message_id IS NOT NULL);
 
 CREATE INDEX idx_chat_queued_messages_chat_id ON chat_queued_messages USING btree (chat_id);
 

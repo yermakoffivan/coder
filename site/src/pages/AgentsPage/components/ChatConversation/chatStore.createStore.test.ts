@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type * as TypesGen from "#/api/typesGenerated";
 import { createChatStore, selectIsAwaitingFirstStreamChunk } from "./chatStore";
+import { getChatMessageRenderKey, type OptimisticUserMessage } from "./types";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -33,10 +34,6 @@ const makeQueuedMessage = (
 	}) as TypesGen.ChatQueuedMessage;
 
 const testChatID = "chat-1";
-
-// ---------------------------------------------------------------------------
-// replaceMessages
-// ---------------------------------------------------------------------------
 
 describe("replaceMessages", () => {
 	it("populates messagesByID and orderedMessageIDs", () => {
@@ -120,6 +117,99 @@ describe("upsertDurableMessages", () => {
 		]);
 
 		expect(store.getSnapshot().orderedMessageIDs).toEqual([1, 2, 3, 4]);
+	});
+});
+
+describe("optimistic user messages", () => {
+	const clientMessageID = "11111111-1111-4111-8111-111111111111";
+	const optimisticMessage: OptimisticUserMessage = {
+		chat_id: testChatID,
+		client_message_id: clientMessageID,
+		created_at: "2025-01-01T00:00:00Z",
+		role: "user",
+		content: [{ type: "text", text: "original prompt" }],
+	};
+
+	it("appends immediately without entering the durable message map", () => {
+		const store = createChatStore();
+
+		store.setOptimisticUserMessage(optimisticMessage);
+
+		const state = store.getSnapshot();
+		expect(state.messagesByID.size).toBe(0);
+		expect(state.orderedMessageIDs).toEqual([]);
+		expect(state.optimisticUserMessage).toBe(optimisticMessage);
+	});
+
+	it("reconciles POST before WebSocket without a duplicate", () => {
+		const store = createChatStore();
+		store.setOptimisticUserMessage(optimisticMessage);
+		const optimisticKey = getChatMessageRenderKey(optimisticMessage);
+		const durableMessage: TypesGen.ChatMessage = {
+			...makeMessage(7, "user", "hook rewritten prompt"),
+			client_message_id: clientMessageID,
+		};
+
+		store.upsertDurableMessages([durableMessage]);
+		store.upsertDurableMessages([durableMessage]);
+
+		const state = store.getSnapshot();
+		expect(state.orderedMessageIDs).toEqual([7]);
+		expect(state.optimisticUserMessage).toBeNull();
+		expect(state.messagesByID.get(7)?.content).toEqual(durableMessage.content);
+		expect(getChatMessageRenderKey(durableMessage)).toBe(optimisticKey);
+	});
+
+	it("reconciles WebSocket before POST without a duplicate", () => {
+		const store = createChatStore();
+		store.setOptimisticUserMessage(optimisticMessage);
+		const durableMessage: TypesGen.ChatMessage = {
+			...makeMessage(8, "user", "hook rewritten prompt"),
+			client_message_id: clientMessageID,
+		};
+
+		store.upsertDurableMessages([durableMessage]);
+		store.setOptimisticUserMessage(optimisticMessage);
+		store.upsertDurableMessages([durableMessage]);
+
+		const state = store.getSnapshot();
+		expect(state.orderedMessageIDs).toEqual([8]);
+		expect(state.optimisticUserMessage).toBeNull();
+		expect(state.messagesByID.size).toBe(1);
+	});
+
+	it("clears when an authoritative queue update arrives before POST", () => {
+		const store = createChatStore();
+		store.setOptimisticUserMessage(optimisticMessage);
+
+		store.applyAuthoritativeQueuedMessages([
+			{
+				...makeQueuedMessage(9, "hook rewritten prompt"),
+				client_message_id: clientMessageID,
+			},
+		]);
+
+		expect(store.getSnapshot().optimisticUserMessage).toBeNull();
+		expect(store.getSnapshot().queuedMessages).toHaveLength(1);
+	});
+
+	it("clears on chat switch", () => {
+		const store = createChatStore();
+		store.setActiveChatID(testChatID);
+		store.setOptimisticUserMessage(optimisticMessage);
+
+		store.setActiveChatID("chat-2");
+
+		expect(store.getSnapshot().optimisticUserMessage).toBeNull();
+	});
+
+	it("removes an optimistic row when queued or failed", () => {
+		const store = createChatStore();
+		store.setOptimisticUserMessage(optimisticMessage);
+
+		store.setOptimisticUserMessage(null);
+
+		expect(store.getSnapshot().optimisticUserMessage).toBeNull();
 	});
 });
 

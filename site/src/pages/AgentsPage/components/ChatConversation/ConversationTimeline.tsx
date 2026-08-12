@@ -6,9 +6,9 @@ import {
 } from "lucide-react";
 import {
 	type FC,
-	Fragment,
 	memo,
 	type ReactNode,
+	type RefObject,
 	useLayoutEffect,
 	useRef,
 	useState,
@@ -35,6 +35,7 @@ import {
 	Message,
 	MessageContent,
 	Response,
+	Shimmer,
 	Tool,
 } from "../ChatElements";
 import { WebSearchSources } from "../ChatElements/tools";
@@ -45,6 +46,7 @@ import {
 } from "../ChatElements/tools/ReadFileTool";
 import type { SubagentVariant } from "../ChatElements/tools/subagentDescriptor";
 import { ToolCall } from "../ChatElements/tools/ToolCall";
+import { ToolIcon } from "../ChatElements/tools/ToolIcon";
 import { ImageLightbox } from "../ImageLightbox";
 import { TextPreviewDialog } from "../TextPreviewDialog";
 import {
@@ -52,19 +54,31 @@ import {
 	type PreviewTextAttachment,
 } from "./AttachmentBlocks";
 import { groupSequentialReadFileBlocks } from "./blockUtils";
+import { ChatStatusCallout } from "./ChatStatusCallout";
 import { FileProbeProvider } from "./FileProbeContext";
+import {
+	type LiveStatusModel,
+	shouldRenderLiveAssistant,
+} from "./liveStatusModel";
 import {
 	buildDisplayMessages,
 	deriveMessageDisplayState,
 } from "./messageHelpers";
 import { getEditableUserMessagePayload } from "./messageParsing";
 import { useSmoothStreamingText } from "./SmoothText";
+import { shouldShowGenericThinking } from "./streamingActivity";
 import { getThinkingDisclosureDisplay } from "./thinkingTitle";
 import type {
 	MergedTool,
 	ParsedMessageContent,
 	ParsedMessageEntry,
 	RenderBlock,
+	StreamState,
+} from "./types";
+import {
+	getChatMessageRenderKey,
+	isDurableChatMessage,
+	type RenderableChatMessage,
 } from "./types";
 import { UserMessageContent } from "./UserMessageContent";
 
@@ -196,23 +210,21 @@ const ReasoningDisclosure = memo<{
 	},
 );
 
-// Wrapper that runs the smooth-streaming jitter buffer on a single
-// response block. Only used during live streaming — historical
-// messages render through <Response> directly.
-const SmoothedResponse = memo<{
+const ResponseBlock = memo<{
 	text: string;
+	isStreaming: boolean;
 	streamKey: string;
 	urlTransform?: UrlTransform;
-}>(({ text, streamKey, urlTransform }) => {
+}>(({ text, isStreaming, streamKey, urlTransform }) => {
 	const { visibleText } = useSmoothStreamingText({
 		fullText: text,
-		isStreaming: true,
-		bypassSmoothing: false,
+		isStreaming,
+		bypassSmoothing: !isStreaming,
 		streamKey,
 	});
 	return (
-		<Response streaming urlTransform={urlTransform}>
-			{visibleText}
+		<Response streaming={isStreaming} urlTransform={urlTransform}>
+			{isStreaming ? visibleText : text}
 		</Response>
 	);
 });
@@ -329,28 +341,16 @@ export const BlockList: FC<{
 		<>
 			{displayBlocks.map((block, index) => {
 				switch (block.type) {
-					case "response": {
-						const responseEl = isStreaming ? (
-							<SmoothedResponse
+					case "response":
+						return (
+							<ResponseBlock
 								key={`${keyPrefix}-response-${index}`}
 								text={block.text}
+								isStreaming={isStreaming}
 								streamKey={keyPrefix}
 								urlTransform={urlTransform}
 							/>
-						) : (
-							<Response
-								key={`${keyPrefix}-response-${index}`}
-								urlTransform={urlTransform}
-							>
-								{block.text}
-							</Response>
 						);
-						return (
-							<Fragment key={`${keyPrefix}-response-${index}`}>
-								{responseEl}
-							</Fragment>
-						);
-					}
 					case "thinking":
 						return (
 							<ReasoningDisclosure
@@ -520,6 +520,114 @@ export const BlockList: FC<{
 	);
 };
 
+const hasCalloutLiveStatus = (liveStatus: LiveStatusModel): boolean =>
+	liveStatus.phase === "retrying" || liveStatus.phase === "reconnecting";
+
+const LiveActivitySlot: FC = () => (
+	<div
+		data-testid="live-activity-slot"
+		className="flex h-6 items-center gap-2 text-content-secondary"
+	>
+		<ToolIcon name="thinking" />
+		<Shimmer as="span" className="text-[13px] leading-6">
+			Thinking
+		</Shimmer>
+	</div>
+);
+
+type StreamingOutputProps = {
+	renderKey: string;
+	content:
+		| { type: "durable"; parsed: ParsedMessageContent }
+		| {
+				type: "live";
+				streamState: StreamState | null;
+				streamTools: readonly MergedTool[];
+				liveStatus: LiveStatusModel;
+				subagentStatusOverrides: Map<string, TypesGen.ChatStatus>;
+		  };
+	subagentTitles?: Map<string, string>;
+	subagentVariants?: Map<string, SubagentVariant>;
+	showDesktopPreviews?: boolean;
+	onImageClick?: (src: string) => void;
+	onTextFileClick?: Parameters<typeof BlockList>[0]["onTextFileClick"];
+	onImplementPlan?: () => Promise<void> | void;
+	onSendAskUserQuestionResponse?: (message: string) => Promise<void> | void;
+	isChatCompleted?: boolean;
+	latestAskUserQuestionToolId?: string;
+	askUserQuestionResponseTextByToolId?: ReadonlyMap<string, string>;
+	hasUserResponseAfterAskQuestion?: boolean;
+	urlTransform?: UrlTransform;
+	mcpServers?: readonly TypesGen.MCPServerConfig[];
+};
+
+export const StreamingOutput: FC<StreamingOutputProps> = ({
+	renderKey,
+	content,
+	subagentTitles,
+	subagentVariants,
+	showDesktopPreviews,
+	onImageClick,
+	onTextFileClick,
+	onImplementPlan,
+	onSendAskUserQuestionResponse,
+	isChatCompleted,
+	latestAskUserQuestionToolId,
+	askUserQuestionResponseTextByToolId,
+	hasUserResponseAfterAskQuestion,
+	urlTransform,
+	mcpServers,
+}) => {
+	const parsed = content.type === "durable" ? content.parsed : undefined;
+	const streamState = content.type === "live" ? content.streamState : null;
+	const streamTools = content.type === "live" ? content.streamTools : [];
+	const liveStatus = content.type === "live" ? content.liveStatus : undefined;
+	const subagentStatusOverrides =
+		content.type === "live" ? content.subagentStatusOverrides : undefined;
+	const isStreaming = liveStatus?.phase === "streaming";
+	const shouldShowLiveBlocks =
+		liveStatus?.phase === "streaming" || liveStatus?.hasAccumulatedOutput;
+	const blocks =
+		parsed?.blocks ?? (shouldShowLiveBlocks ? streamState?.blocks : []);
+	const tools = parsed?.tools ?? streamTools;
+	const showActivity = liveStatus
+		? shouldShowGenericThinking({ liveStatus, streamState, streamTools })
+		: false;
+
+	return (
+		<div className="relative flex flex-col gap-2 overflow-visible">
+			{(parsed || shouldShowLiveBlocks) && (
+				<BlockList
+					blocks={blocks ?? []}
+					tools={tools}
+					keyPrefix={renderKey}
+					isStreaming={isStreaming}
+					subagentTitles={subagentTitles}
+					subagentVariants={subagentVariants}
+					showDesktopPreviews={showDesktopPreviews}
+					subagentStatusOverrides={subagentStatusOverrides}
+					onImageClick={onImageClick}
+					onTextFileClick={onTextFileClick}
+					onImplementPlan={onImplementPlan}
+					onSendAskUserQuestionResponse={onSendAskUserQuestionResponse}
+					isChatCompleted={isChatCompleted}
+					latestAskUserQuestionToolId={latestAskUserQuestionToolId}
+					askUserQuestionResponseTextByToolId={
+						askUserQuestionResponseTextByToolId
+					}
+					hasUserResponseAfterAskQuestion={hasUserResponseAfterAskQuestion}
+					urlTransform={urlTransform}
+					mcpServers={mcpServers}
+				/>
+			)}
+			{liveStatus && hasCalloutLiveStatus(liveStatus) && (
+				<ChatStatusCallout status={liveStatus} />
+			)}
+			{showActivity && <LiveActivitySlot />}
+		</div>
+	);
+};
+
 // Avoid announcing historical hook notices as live alerts.
 const TimelineNotice: FC<{ children?: ReactNode }> = ({ children }) => (
 	<div
@@ -545,9 +653,24 @@ const LifecycleHookNotice: FC<{
 	</TimelineNotice>
 );
 
+type ChatMessageRow =
+	| {
+			type: "message";
+			message: RenderableChatMessage;
+			parsed: ParsedMessageContent;
+	  }
+	| {
+			type: "live";
+			streamState: StreamState | null;
+			streamTools: readonly MergedTool[];
+			liveStatus: LiveStatusModel;
+			subagentStatusOverrides: Map<string, TypesGen.ChatStatus>;
+	  };
+
 const ChatMessageItem = memo<{
-	message: TypesGen.ChatMessage;
-	parsed: ParsedMessageContent;
+	row: ChatMessageRow;
+	renderKey: string;
+	showRowIdentity?: boolean;
 	onEditUserMessage?: (
 		messageId: number,
 		text: string,
@@ -584,8 +707,9 @@ const ChatMessageItem = memo<{
 	onJumpToUserMessage?: (messageId: number) => void;
 }>(
 	({
-		message,
-		parsed,
+		row,
+		renderKey,
+		showRowIdentity = true,
 		onEditUserMessage,
 		editingMessageId,
 		isAfterEditingMessage = false,
@@ -610,21 +734,33 @@ const ChatMessageItem = memo<{
 		subagentVariants,
 		showDesktopPreviews,
 	}) => {
-		const isUser = message.role === "user";
+		const message = row.type === "message" ? row.message : undefined;
+		const parsed = row.type === "message" ? row.parsed : undefined;
+		const streamState = row.type === "live" ? row.streamState : null;
+		const streamTools = row.type === "live" ? row.streamTools : [];
+		const liveStatus = row.type === "live" ? row.liveStatus : undefined;
+		const subagentStatusOverrides =
+			row.type === "live" ? row.subagentStatusOverrides : undefined;
+		const isUser = message?.role === "user";
+		const messageId =
+			message && isDurableChatMessage(message) ? message.id : undefined;
 		const [previewImage, setPreviewImage] = useState<string | null>(null);
 		const [previewText, setPreviewText] =
 			useState<PreviewTextAttachment | null>(null);
-		const displayState = deriveMessageDisplayState({
-			message,
-			parsed,
-			hideActions,
-			hasActiveStream,
-			isAwaitingFirstStreamChunk,
-		});
-		if (displayState.shouldHide) {
+		const displayState =
+			message && parsed
+				? deriveMessageDisplayState({
+						message,
+						parsed,
+						hideActions,
+						hasActiveStream,
+						isAwaitingFirstStreamChunk,
+					})
+				: undefined;
+		if (displayState?.shouldHide) {
 			return null;
 		}
-		if (message.role === "system") {
+		if (message?.role === "system" && parsed) {
 			return (
 				<div
 					className={cn(
@@ -637,7 +773,7 @@ const ChatMessageItem = memo<{
 					{parsed.hookNotices.length > 0 ? (
 						parsed.hookNotices.map((notice, index) => (
 							<LifecycleHookNotice
-								key={`${message.id}-hook-notice-${index}`}
+								key={`${renderKey}-hook-notice-${index}`}
 								urlTransform={urlTransform}
 							>
 								{notice}
@@ -652,12 +788,31 @@ const ChatMessageItem = memo<{
 			);
 		}
 
+		if (!message && !liveStatus) {
+			return null;
+		}
+
+		const liveContent: StreamingOutputProps["content"] | undefined = liveStatus
+			? {
+					type: "live",
+					streamState: streamState ?? null,
+					streamTools: streamTools ?? [],
+					liveStatus,
+					subagentStatusOverrides: subagentStatusOverrides ?? new Map(),
+				}
+			: undefined;
+		const assistantContent: StreamingOutputProps["content"] | undefined = parsed
+			? { type: "durable", parsed }
+			: liveContent;
+
 		const conversationItemProps: { role: "user" | "assistant" } = {
 			role: isUser ? "user" : "assistant",
 		};
 
 		return (
 			<div
+				data-testid={showRowIdentity ? `chat-message-${renderKey}` : undefined}
+				data-message-key={showRowIdentity ? renderKey : undefined}
 				className={cn(
 					isAfterEditingMessage && "opacity-40 pointer-events-none",
 					"group/msg relative transition-opacity duration-200",
@@ -665,58 +820,55 @@ const ChatMessageItem = memo<{
 				inert={isAfterEditingMessage ? true : undefined}
 			>
 				<ConversationItem {...conversationItemProps}>
-					{isUser ? (
+					{isUser && displayState && parsed ? (
 						<UserMessageContent
 							displayState={displayState}
 							markdown={parsed.markdown}
-							isEditing={editingMessageId === message.id}
+							isEditing={
+								messageId !== undefined && editingMessageId === messageId
+							}
 							fadeFromBottom={fadeFromBottom}
 							onImageClick={setPreviewImage}
 							onTextFileClick={setPreviewText}
 						/>
-					) : (
+					) : assistantContent ? (
 						<Message className="w-full">
 							<MessageContent className="whitespace-normal">
-								{/* Keep assistant content spacing consistent by letting the parent stack own every top-level gap. */}
-								<div className="relative flex flex-col gap-2 overflow-visible">
-									<BlockList
-										blocks={parsed.blocks}
-										tools={parsed.tools}
-										keyPrefix={String(message.id)}
-										subagentTitles={subagentTitles}
-										subagentVariants={subagentVariants}
-										showDesktopPreviews={showDesktopPreviews}
-										onImplementPlan={onImplementPlan}
-										onSendAskUserQuestionResponse={
-											onSendAskUserQuestionResponse
-										}
-										isChatCompleted={isChatCompleted}
-										latestAskUserQuestionToolId={latestAskUserQuestionToolId}
-										askUserQuestionResponseTextByToolId={
-											askUserQuestionResponseTextByToolId
-										}
-										hasUserResponseAfterAskQuestion={
-											hasUserResponseAfterAskQuestion
-										}
-										onImageClick={setPreviewImage}
-										onTextFileClick={setPreviewText}
-										urlTransform={urlTransform}
-										mcpServers={mcpServers}
-									/>
-								</div>
+								<StreamingOutput
+									renderKey={renderKey}
+									content={assistantContent}
+									subagentTitles={subagentTitles}
+									subagentVariants={subagentVariants}
+									showDesktopPreviews={showDesktopPreviews}
+									onImplementPlan={onImplementPlan}
+									onSendAskUserQuestionResponse={onSendAskUserQuestionResponse}
+									isChatCompleted={isChatCompleted}
+									latestAskUserQuestionToolId={latestAskUserQuestionToolId}
+									askUserQuestionResponseTextByToolId={
+										askUserQuestionResponseTextByToolId
+									}
+									hasUserResponseAfterAskQuestion={
+										hasUserResponseAfterAskQuestion
+									}
+									onImageClick={setPreviewImage}
+									onTextFileClick={setPreviewText}
+									urlTransform={urlTransform}
+									mcpServers={mcpServers}
+								/>
 							</MessageContent>
 						</Message>
-					)}
+					) : null}
 				</ConversationItem>
-				{parsed.hookNotices.map((notice, index) => (
+				{parsed?.hookNotices.map((notice, index) => (
 					<LifecycleHookNotice
-						key={`${message.id}-hook-notice-${index}`}
+						key={`${renderKey}-hook-notice-${index}`}
 						urlTransform={urlTransform}
 					>
 						{notice}
 					</LifecycleHookNotice>
 				))}
-				{!hideActions &&
+				{displayState &&
+					!hideActions &&
 					(displayState.hasCopyableContent ||
 						(isUser && onEditUserMessage)) && (
 						<div
@@ -726,7 +878,7 @@ const ChatMessageItem = memo<{
 							)}
 							data-testid="message-actions"
 						>
-							{displayState.hasCopyableContent && (
+							{displayState.hasCopyableContent && parsed && (
 								<CopyButton
 									text={parsed.markdown}
 									label="Copy message"
@@ -734,7 +886,7 @@ const ChatMessageItem = memo<{
 									tooltipSide="bottom"
 								/>
 							)}
-							{isUser && onEditUserMessage && (
+							{isUser && messageId !== undefined && onEditUserMessage && (
 								<Tooltip>
 									<TooltipTrigger asChild>
 										<Button
@@ -745,7 +897,9 @@ const ChatMessageItem = memo<{
 											onClick={() => {
 												const { text, fileBlocks } =
 													getEditableUserMessagePayload(message);
-												onEditUserMessage(message.id, text, fileBlocks);
+												if (messageId !== undefined) {
+													onEditUserMessage(messageId, text, fileBlocks);
+												}
 											}}
 										>
 											<PencilIcon />
@@ -812,7 +966,7 @@ const ChatMessageItem = memo<{
 								)}
 						</div>
 					)}
-				{displayState.needsAssistantBottomSpacer && !isLastMessage && (
+				{displayState?.needsAssistantBottomSpacer && !isLastMessage && (
 					<div className="min-h-6" data-testid="assistant-bottom-spacer" />
 				)}
 				{previewImage && (
@@ -835,7 +989,7 @@ const ChatMessageItem = memo<{
 );
 
 const StickyUserMessage = memo<{
-	message: TypesGen.ChatMessage;
+	message: RenderableChatMessage;
 	parsed: ParsedMessageContent;
 	onEditUserMessage?: (
 		messageId: number,
@@ -847,7 +1001,7 @@ const StickyUserMessage = memo<{
 	prevUserMessageId?: number;
 	nextUserMessageId?: number;
 	onJumpToUserMessage?: (messageId: number) => void;
-	registerSentinel?: (messageId: number, el: HTMLDivElement | null) => void;
+	sentinelsRef?: RefObject<Map<string, HTMLDivElement>>;
 	urlTransform?: UrlTransform;
 }>(
 	({
@@ -859,17 +1013,21 @@ const StickyUserMessage = memo<{
 		prevUserMessageId,
 		nextUserMessageId,
 		onJumpToUserMessage,
-		registerSentinel,
+		sentinelsRef,
 		urlTransform,
 	}) => {
 		const [isStuck, setIsStuck] = useState(false);
 		const [isReady, setIsReady] = useState(false);
 		const [isTooTall, setIsTooTall] = useState(false);
 		const sentinelRef = useRef<HTMLDivElement>(null);
-		const messageId = message.id;
+		const messageKey = getChatMessageRenderKey(message);
 		const setSentinelRef = (el: HTMLDivElement | null) => {
 			sentinelRef.current = el;
-			registerSentinel?.(messageId, el);
+			if (el) {
+				sentinelsRef?.current.set(messageKey, el);
+			} else {
+				sentinelsRef?.current.delete(messageKey);
+			}
 		};
 		const containerRef = useRef<HTMLDivElement>(null);
 		const updateFnRef = useRef<(() => void) | null>(null);
@@ -1070,6 +1228,8 @@ const StickyUserMessage = memo<{
 				<div ref={setSentinelRef} className="h-0" data-user-sentinel />
 				<div
 					ref={containerRef}
+					data-testid={`chat-message-${messageKey}`}
+					data-message-key={messageKey}
 					className={cn(
 						"relative px-3 -mx-3 -mt-2",
 						!isTooTall && "sticky z-10",
@@ -1096,8 +1256,9 @@ const StickyUserMessage = memo<{
 						inert={isStuck && !isTooTall ? true : undefined}
 					>
 						<ChatMessageItem
-							message={message}
-							parsed={parsed}
+							renderKey={messageKey}
+							showRowIdentity={false}
+							row={{ type: "message", message, parsed }}
 							onEditUserMessage={handleEditUserMessage}
 							editingMessageId={editingMessageId}
 							isAfterEditingMessage={isAfterEditingMessage}
@@ -1142,8 +1303,9 @@ const StickyUserMessage = memo<{
 							    to GPU layer. */}
 							<div className="relative px-3 pointer-events-auto will-change-[max-height]">
 								<ChatMessageItem
-									message={message}
-									parsed={parsed}
+									renderKey={messageKey}
+									showRowIdentity={false}
+									row={{ type: "message", message, parsed }}
 									onEditUserMessage={handleEditUserMessage}
 									editingMessageId={editingMessageId}
 									isAfterEditingMessage={isAfterEditingMessage}
@@ -1181,8 +1343,60 @@ function computeLastInChainFlags(
 	return flags;
 }
 
+type TimelineRow =
+	| { type: "message"; entry: ParsedMessageEntry; index: number; key: string }
+	| { type: "live"; key: string; liveStatus: LiveStatusModel };
+
+const buildTimelineRows = (
+	displayMessages: readonly ParsedMessageEntry[],
+	liveStatus: LiveStatusModel | undefined,
+): TimelineRow[] => {
+	const rows: TimelineRow[] = [];
+	let userKey: string | undefined;
+	let assistantOrdinal = 0;
+	for (const [index, entry] of displayMessages.entries()) {
+		const { message } = entry;
+		if (message.role === "user") {
+			userKey = getChatMessageRenderKey(message);
+			assistantOrdinal = 0;
+			rows.push({ type: "message", entry, index, key: userKey });
+			continue;
+		}
+		if (message.role === "assistant" && userKey) {
+			rows.push({
+				type: "message",
+				entry,
+				index,
+				key: `${userKey}:assistant:${assistantOrdinal}`,
+			});
+			assistantOrdinal += 1;
+			continue;
+		}
+		rows.push({
+			type: "message",
+			entry,
+			index,
+			key: getChatMessageRenderKey(message),
+		});
+	}
+	if (liveStatus && shouldRenderLiveAssistant(liveStatus)) {
+		rows.push({
+			type: "live",
+			key: userKey
+				? `${userKey}:assistant:${assistantOrdinal}`
+				: "live-assistant",
+			liveStatus,
+		});
+	}
+	return rows;
+};
+
 interface ConversationTimelineProps {
 	parsedMessages: readonly ParsedMessageEntry[];
+	streamState?: StreamState | null;
+	streamTools?: readonly MergedTool[];
+	liveStatus?: LiveStatusModel;
+	subagentStatusOverrides?: Map<string, TypesGen.ChatStatus>;
 	subagentTitles: Map<string, string>;
 	subagentVariants?: Map<string, SubagentVariant>;
 	onEditUserMessage?: (
@@ -1204,6 +1418,10 @@ interface ConversationTimelineProps {
 export const ConversationTimeline = memo<ConversationTimelineProps>(
 	({
 		parsedMessages,
+		streamState,
+		streamTools = [],
+		liveStatus,
+		subagentStatusOverrides,
 		subagentTitles,
 		subagentVariants,
 		onEditUserMessage,
@@ -1217,25 +1435,28 @@ export const ConversationTimeline = memo<ConversationTimelineProps>(
 		hasActiveStream,
 		isAwaitingFirstStreamChunk,
 	}) => {
-		const sentinelsRef = useRef<Map<number, HTMLDivElement>>(new Map());
-		const registerSentinel = (messageId: number, el: HTMLDivElement | null) => {
-			if (el) {
-				sentinelsRef.current.set(messageId, el);
-			} else {
-				sentinelsRef.current.delete(messageId);
-			}
-		};
+		const sentinelsRef = useRef<Map<string, HTMLDivElement>>(new Map());
 		const jumpToUserMessage = (messageId: number) => {
-			sentinelsRef.current.get(messageId)?.scrollIntoView({
-				behavior: "smooth",
-				block: "start",
-			});
+			const message = parsedMessages.find(
+				(entry) =>
+					isDurableChatMessage(entry.message) && entry.message.id === messageId,
+			)?.message;
+			if (!message) {
+				return;
+			}
+			sentinelsRef.current
+				.get(getChatMessageRenderKey(message))
+				?.scrollIntoView({
+					behavior: "smooth",
+					block: "start",
+				});
 		};
 
 		const displayMessages = buildDisplayMessages(parsedMessages);
 		const lastInChainFlags = computeLastInChainFlags(displayMessages);
+		const renderRows = buildTimelineRows(displayMessages, liveStatus);
 
-		if (parsedMessages.length === 0) {
+		if (renderRows.length === 0) {
 			return null;
 		}
 
@@ -1245,11 +1466,14 @@ export const ConversationTimeline = memo<ConversationTimelineProps>(
 		if (editingMessageId != null) {
 			let found = false;
 			for (const entry of parsedMessages) {
-				if (entry.message.id === editingMessageId) {
+				if (
+					isDurableChatMessage(entry.message) &&
+					entry.message.id === editingMessageId
+				) {
 					found = true;
 					continue;
 				}
-				if (found) {
+				if (found && isDurableChatMessage(entry.message)) {
 					afterEditingMessageIds.add(entry.message.id);
 				}
 			}
@@ -1260,7 +1484,7 @@ export const ConversationTimeline = memo<ConversationTimelineProps>(
 		// to the neighbouring user prompt.
 		const visibleUserMessageIds: number[] = [];
 		for (const { message, parsed } of parsedMessages) {
-			if (message.role !== "user") continue;
+			if (message.role !== "user" || !isDurableChatMessage(message)) continue;
 			const { shouldHide } = deriveMessageDisplayState({
 				message,
 				parsed,
@@ -1325,7 +1549,33 @@ export const ConversationTimeline = memo<ConversationTimelineProps>(
 					data-testid="conversation-timeline"
 					className="flex flex-col gap-2"
 				>
-					{displayMessages.map(({ message, parsed }, msgIdx) => {
+					{renderRows.map((row) => {
+						if (row.type === "live") {
+							return (
+								<ChatMessageItem
+									key={row.key}
+									renderKey={row.key}
+									row={{
+										type: "live",
+										streamState: streamState ?? null,
+										streamTools,
+										liveStatus: row.liveStatus,
+										subagentStatusOverrides:
+											subagentStatusOverrides ?? new Map(),
+									}}
+									subagentTitles={subagentTitles}
+									subagentVariants={subagentVariants}
+									urlTransform={urlTransform}
+									mcpServers={mcpServers}
+								/>
+							);
+						}
+						const { message, parsed } = row.entry;
+						const msgIdx = row.index;
+						const stableKey = row.key;
+						const messageId = isDurableChatMessage(message)
+							? message.id
+							: undefined;
 						if (message.role === "user") {
 							const { shouldHide } = deriveMessageDisplayState({
 								message,
@@ -1339,16 +1589,27 @@ export const ConversationTimeline = memo<ConversationTimelineProps>(
 							}
 							return (
 								<StickyUserMessage
-									key={message.id}
+									key={stableKey}
 									message={message}
 									parsed={parsed}
 									onEditUserMessage={onEditUserMessage}
 									editingMessageId={editingMessageId}
-									isAfterEditingMessage={afterEditingMessageIds.has(message.id)}
-									prevUserMessageId={userNeighborsById.get(message.id)?.prevId}
-									nextUserMessageId={userNeighborsById.get(message.id)?.nextId}
+									isAfterEditingMessage={
+										messageId !== undefined &&
+										afterEditingMessageIds.has(messageId)
+									}
+									prevUserMessageId={
+										messageId === undefined
+											? undefined
+											: userNeighborsById.get(messageId)?.prevId
+									}
+									nextUserMessageId={
+										messageId === undefined
+											? undefined
+											: userNeighborsById.get(messageId)?.nextId
+									}
 									onJumpToUserMessage={jumpToUserMessage}
-									registerSentinel={registerSentinel}
+									sentinelsRef={sentinelsRef}
 									urlTransform={urlTransform}
 								/>
 							);
@@ -1359,9 +1620,9 @@ export const ConversationTimeline = memo<ConversationTimelineProps>(
 						const isLastInChain = lastInChainFlags[msgIdx];
 						return (
 							<ChatMessageItem
-								key={message.id}
-								message={message}
-								parsed={parsed}
+								key={stableKey}
+								renderKey={stableKey}
+								row={{ type: "message", message, parsed }}
 								onImplementPlan={onImplementPlan}
 								onSendAskUserQuestionResponse={onSendAskUserQuestionResponse}
 								isChatCompleted={isChatCompleted}
@@ -1373,7 +1634,10 @@ export const ConversationTimeline = memo<ConversationTimelineProps>(
 									hasUserResponseAfterAskQuestion
 								}
 								urlTransform={urlTransform}
-								isAfterEditingMessage={afterEditingMessageIds.has(message.id)}
+								isAfterEditingMessage={
+									messageId !== undefined &&
+									afterEditingMessageIds.has(messageId)
+								}
 								hideActions={!isLastInChain}
 								hasActiveStream={Boolean(hasActiveStream)}
 								isAwaitingFirstStreamChunk={Boolean(isAwaitingFirstStreamChunk)}

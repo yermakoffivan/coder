@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/google/uuid"
 	"golang.org/x/xerrors"
 )
 
@@ -49,6 +50,11 @@ var (
 	// wraps this sentinel.
 	ErrMessageQueueFull = xerrors.New("chat message queue is full")
 
+	// ErrDuplicateClientMessageID is returned by [Tx.SendMessage] when
+	// the submitted correlation ID is already present in active history
+	// or the queue for the same chat.
+	ErrDuplicateClientMessageID = xerrors.New("duplicate client message ID")
+
 	// ErrChatFileCapExceeded reports a [LinkFiles] cap rejection.
 	ErrChatFileCapExceeded = xerrors.New("chat attachment cap exceeded")
 
@@ -90,6 +96,21 @@ func (e *MessageQueueFullError) Error() string {
 // Unwrap returns [ErrMessageQueueFull] so callers can match the
 // generic sentinel.
 func (*MessageQueueFullError) Unwrap() error { return ErrMessageQueueFull }
+
+// DuplicateClientMessageIDError carries the conflicting correlation ID.
+type DuplicateClientMessageIDError struct {
+	ClientMessageID uuid.UUID
+}
+
+// Error implements the error interface.
+func (e *DuplicateClientMessageIDError) Error() string {
+	return fmt.Sprintf("duplicate client message ID: %s", e.ClientMessageID)
+}
+
+// Unwrap returns [ErrDuplicateClientMessageID].
+func (*DuplicateClientMessageIDError) Unwrap() error {
+	return ErrDuplicateClientMessageID
+}
 
 // ToolResultValidationError carries a structured tool-result
 // validation failure. It always wraps a specific sentinel

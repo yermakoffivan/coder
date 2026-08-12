@@ -1,17 +1,17 @@
 import type { InfiniteData } from "react-query";
 import type * as TypesGen from "#/api/typesGenerated";
 
-const buildOptimisticEditedContent = ({
+export const buildOptimisticChatMessageContent = ({
 	requestContent,
 	originalMessage,
 	attachmentMediaTypes,
 }: {
 	requestContent: readonly TypesGen.ChatInputPart[];
-	originalMessage: TypesGen.ChatMessage;
+	originalMessage?: TypesGen.ChatMessage;
 	attachmentMediaTypes?: ReadonlyMap<string, string>;
 }): readonly TypesGen.ChatMessagePart[] => {
 	const existingFilePartsByID = new Map<string, TypesGen.ChatFilePart>();
-	for (const part of originalMessage.content ?? []) {
+	for (const part of originalMessage?.content ?? []) {
 		if (part.type === "file" && part.file_id) {
 			existingFilePartsByID.set(part.file_id, part);
 		}
@@ -52,7 +52,7 @@ export const buildOptimisticEditedMessage = ({
 	attachmentMediaTypes?: ReadonlyMap<string, string>;
 }): TypesGen.ChatMessage => ({
 	...originalMessage,
-	content: buildOptimisticEditedContent({
+	content: buildOptimisticChatMessageContent({
 		requestContent,
 		originalMessage,
 		attachmentMediaTypes,

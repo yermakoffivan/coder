@@ -116,40 +116,6 @@ const hiddenToolResultMessage = (
 		},
 	});
 
-const textMessage = (
-	messageID: number,
-	text: string,
-	role: TypesGen.ChatMessageRole = "assistant",
-): ParsedMessageEntry =>
-	entry({
-		messageID,
-		role,
-		content: [{ type: "text", text }],
-		parsedOverrides: {
-			markdown: text,
-			blocks: [{ type: "response", text }],
-		},
-	});
-
-const executeMessage = (messageID: number): ParsedMessageEntry => {
-	const args = { command: "pnpm test" };
-	const tool: MergedTool = {
-		id: "execute-1",
-		name: "execute",
-		args,
-		isError: false,
-		status: "completed",
-	};
-	return entry({
-		messageID,
-		parsedOverrides: {
-			toolCalls: [{ id: tool.id, name: tool.name, args }],
-			tools: [tool],
-			blocks: [{ type: "tool", id: tool.id }],
-		},
-	});
-};
-
 const message = ({
 	messageID,
 	role,
@@ -466,90 +432,16 @@ describe("buildDisplayMessages", () => {
 		]);
 	});
 
-	it("returns a single read_file-only message unchanged", () => {
-		const readFile = readFileMessage(1, "read-1");
-
-		const result = buildDisplayMessages([readFile]);
-
-		expect(result).toHaveLength(1);
-		expect(result[0]).toBe(readFile);
-	});
-
-	it("collapses read_file-only assistant messages across hidden tool results", () => {
+	it("keeps read_file assistant messages as individual durable rows", () => {
+		const firstRead = readFileMessage(1, "read-1");
+		const secondRead = readFileMessage(3, "read-2");
 		const result = buildDisplayMessages([
-			readFileMessage(1, "read-1"),
+			firstRead,
 			hiddenToolResultMessage(2, "read-1"),
-			readFileMessage(3, "read-2"),
+			secondRead,
 			hiddenToolResultMessage(4, "read-2"),
 		]);
 
-		expect(result).toHaveLength(1);
-		expect(result[0].message.id).toBe(1);
-		expect(result[0].parsed.toolCalls).toEqual([
-			{ id: "read-1", name: "read_file", args: { path: "read-1.ts" } },
-			{ id: "read-2", name: "read_file", args: { path: "read-2.ts" } },
-		]);
-		expect(result[0].parsed.toolResults).toEqual([
-			readFileToolResult("read-1"),
-			readFileToolResult("read-2"),
-		]);
-		expect(result[0].parsed.blocks).toEqual([
-			{ type: "tool", id: "read-1" },
-			{ type: "tool", id: "read-2" },
-		]);
-		expect(result[0].parsed.tools.map((tool) => tool.id)).toEqual([
-			"read-1",
-			"read-2",
-		]);
-	});
-
-	it.each([
-		["assistant", textMessage(2, "middle")],
-		["user", textMessage(2, "middle", "user")],
-	] satisfies Array<
-		[string, ParsedMessageEntry]
-	>)("does not collapse read_file messages across visible %s content", (_, message) => {
-		const result = buildDisplayMessages([
-			readFileMessage(1, "read-1"),
-			message,
-			readFileMessage(3, "read-2"),
-		]);
-
-		expect(result.map((entry) => entry.message.id)).toEqual([1, 2, 3]);
-		expect(result[0].parsed.blocks).toEqual([{ type: "tool", id: "read-1" }]);
-		expect(result[2].parsed.blocks).toEqual([{ type: "tool", id: "read-2" }]);
-	});
-
-	it.each([
-		["markdown", { markdown: "Visible markdown" }],
-		["reasoning", { reasoning: "Visible reasoning" }],
-		[
-			"sources",
-			{
-				sources: [
-					{ url: "https://example.com/read-2", title: "Read 2 source" },
-				],
-			},
-		],
-	] satisfies Array<
-		[string, Partial<ParsedMessageContent>]
-	>)("does not collapse read_file messages with visible %s", (_, overrides) => {
-		const result = buildDisplayMessages([
-			readFileMessage(1, "read-1"),
-			readFileMessage(2, "read-2", overrides),
-			readFileMessage(3, "read-3"),
-		]);
-
-		expect(result.map((entry) => entry.message.id)).toEqual([1, 2, 3]);
-	});
-
-	it("does not collapse read_file messages across another visible tool", () => {
-		const result = buildDisplayMessages([
-			readFileMessage(1, "read-1"),
-			executeMessage(2),
-			readFileMessage(3, "read-2"),
-		]);
-
-		expect(result.map((entry) => entry.message.id)).toEqual([1, 2, 3]);
+		expect(result).toEqual([firstRead, secondRead]);
 	});
 });

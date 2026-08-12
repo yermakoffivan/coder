@@ -1,9 +1,16 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import type { FC } from "react";
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { hashKey } from "react-query";
 import { Outlet, useNavigate } from "react-router";
-import { expect, spyOn, userEvent, waitFor, within } from "storybook/test";
+import {
+	expect,
+	fireEvent,
+	spyOn,
+	userEvent,
+	waitFor,
+	within,
+} from "storybook/test";
 import {
 	reactRouterOutlet,
 	reactRouterParameters,
@@ -45,11 +52,20 @@ import {
 } from "#/testHelpers/storybook";
 import AgentChatPage, { RIGHT_PANEL_OPEN_KEY } from "./AgentChatPage";
 import type { AgentsPageOutletContext } from "./AgentsPageLayout";
+import type { ChatDetailError } from "./components/ChatConversation/chatError";
 
 // ---------------------------------------------------------------------------
 // Layout wrapper: provides outlet context for the child route.
 // ---------------------------------------------------------------------------
-const AgentChatPageLayout: FC = () => {
+const AgentChatPageLayout: FC<{
+	chatErrorReasons?: Record<string, ChatDetailError>;
+	setChatErrorReason?: (chatId: string, reason: ChatDetailError) => void;
+	clearChatErrorReason?: (chatId: string) => void;
+}> = ({
+	chatErrorReasons = {},
+	setChatErrorReason = () => {},
+	clearChatErrorReason = () => {},
+}) => {
 	const scrollContainerRef = useRef<HTMLDivElement | null>(null);
 	return (
 		<div className="flex h-full">
@@ -57,9 +73,9 @@ const AgentChatPageLayout: FC = () => {
 				<Outlet
 					context={
 						{
-							chatErrorReasons: {},
-							setChatErrorReason: () => {},
-							clearChatErrorReason: () => {},
+							chatErrorReasons,
+							setChatErrorReason,
+							clearChatErrorReason,
 							requestArchiveAgent: () => {},
 							requestArchiveAndDeleteWorkspace: (
 								_chatId: string,
@@ -102,6 +118,40 @@ const AgentChatSwitchHarness: FC = () => {
 				Switch chat
 			</button>
 			<AgentChatPageLayout />
+		</>
+	);
+};
+
+const AgentChatSwitchFailureHarness: FC = () => {
+	const navigate = useNavigate();
+	const [chatErrorReasons, setChatErrorReasons] = useState<
+		Record<string, ChatDetailError>
+	>({});
+	return (
+		<>
+			<button
+				type="button"
+				className="sr-only"
+				onClick={() => navigate(`/agents/${SWITCHED_CHAT_ID}`)}
+			>
+				Switch chat
+			</button>
+			<output aria-label="Original chat error">
+				{chatErrorReasons[CHAT_ID]?.message}
+			</output>
+			<AgentChatPageLayout
+				chatErrorReasons={chatErrorReasons}
+				setChatErrorReason={(chatId, reason) =>
+					setChatErrorReasons((current) => ({ ...current, [chatId]: reason }))
+				}
+				clearChatErrorReason={(chatId) =>
+					setChatErrorReasons((current) => {
+						const next = { ...current };
+						delete next[chatId];
+						return next;
+					})
+				}
+			/>
 		</>
 	);
 };
@@ -3149,6 +3199,207 @@ export const SendResponseAfterChatSwitch: Story = {
 	},
 };
 
+export const PendingChatSettingSyncStopsSendAfterChatSwitch: Story = {
+	render: () => <AgentChatSwitchHarness />,
+	parameters: {
+		queries: [
+			...buildQueries(
+				{
+					id: CHAT_ID,
+					...baseChatFields,
+					title: "Original chat",
+					status: "waiting",
+				},
+				{ messages: [], queued_messages: [], has_more: false },
+				{ diffUrl: undefined },
+			),
+			{ key: chatEntityKey(SWITCHED_CHAT_ID), data: switchedChat },
+			{
+				key: chatMessagesKey(SWITCHED_CHAT_ID),
+				data: {
+					pages: [
+						{
+							messages: [switchedChatMessage],
+							queued_messages: [],
+							has_more: false,
+						},
+					],
+					pageParams: [undefined],
+				},
+			},
+			{
+				key: chatPromptsKey(SWITCHED_CHAT_ID),
+				data: { prompts: [] } satisfies TypesGen.ChatPromptsResponse,
+			},
+			{
+				key: chatDiffContentsKey(SWITCHED_CHAT_ID),
+				data: { chat_id: SWITCHED_CHAT_ID } satisfies TypesGen.ChatDiffContents,
+			},
+		],
+	},
+	beforeEach: () => {
+		spyOn(API.experimental, "getUserSkills").mockResolvedValue([]);
+	},
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		const body = within(canvasElement.ownerDocument.body);
+		const user = userEvent.setup();
+		let releasePlanModeUpdate: (() => void) | undefined;
+		const updateGate = new Promise<void>((resolve) => {
+			releasePlanModeUpdate = resolve;
+		});
+		let updateSettled = false;
+		const updateSpy = spyOn(API.experimental, "updateChat").mockImplementation(
+			async () => {
+				await updateGate;
+				updateSettled = true;
+			},
+		);
+		const sendSpy = spyOn(API.experimental, "createChatMessage");
+
+		const editor = await canvas.findByTestId("chat-message-input");
+		await user.click(editor);
+		await user.type(editor, "Prompt waiting for settings");
+		await user.click(canvas.getByRole("button", { name: "More options" }));
+		const toggles = await body.findAllByRole("menuitemcheckbox", {
+			name: "Plan first",
+		});
+		const toggle = toggles.at(-1);
+		if (!toggle) {
+			throw new Error("Plan mode toggle did not render.");
+		}
+
+		const sendButton = canvas.getByRole("button", { name: "Send" });
+		fireEvent.click(toggle);
+		fireEvent.click(sendButton);
+		await waitFor(() => expect(updateSpy).toHaveBeenCalledTimes(1));
+		expect(sendSpy).not.toHaveBeenCalled();
+
+		await user.click(canvas.getByRole("button", { name: "Switch chat" }));
+		const timeline = within(await canvas.findByTestId("conversation-timeline"));
+		expect(await timeline.findByText("Current chat message")).toBeVisible();
+
+		releasePlanModeUpdate?.();
+		await waitFor(() => expect(updateSettled).toBe(true));
+		await waitFor(() => expect(sendSpy).not.toHaveBeenCalled());
+		expect(timeline.queryByText("Prompt waiting for settings")).toBeNull();
+		expect(timeline.getByText("Current chat message")).toBeVisible();
+	},
+};
+
+export const SendFailureAfterChatSwitch: Story = {
+	render: () => <AgentChatSwitchFailureHarness />,
+	parameters: {
+		queries: [
+			...buildQueries(
+				{
+					id: CHAT_ID,
+					...baseChatFields,
+					title: "Original chat",
+					status: "waiting",
+				},
+				{ messages: [], queued_messages: [], has_more: false },
+				{ diffUrl: undefined },
+			),
+			{ key: chatEntityKey(SWITCHED_CHAT_ID), data: switchedChat },
+			{
+				key: chatMessagesKey(SWITCHED_CHAT_ID),
+				data: {
+					pages: [
+						{
+							messages: [switchedChatMessage],
+							queued_messages: [],
+							has_more: false,
+						},
+					],
+					pageParams: [undefined],
+				},
+			},
+			{
+				key: chatPromptsKey(SWITCHED_CHAT_ID),
+				data: { prompts: [] } satisfies TypesGen.ChatPromptsResponse,
+			},
+			{
+				key: chatDiffContentsKey(SWITCHED_CHAT_ID),
+				data: { chat_id: SWITCHED_CHAT_ID } satisfies TypesGen.ChatDiffContents,
+			},
+		],
+	},
+	beforeEach: () => {
+		spyOn(API.experimental, "getUserSkills").mockResolvedValue([]);
+	},
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		let rejectOriginalSend: ((reason: unknown) => void) | undefined;
+		const originalSend = new Promise<never>((_resolve, reject) => {
+			rejectOriginalSend = reject;
+		});
+		let resolveNewerSend:
+			| ((response: TypesGen.CreateChatMessageResponse) => void)
+			| undefined;
+		const newerSend = new Promise<TypesGen.CreateChatMessageResponse>(
+			(resolve) => {
+				resolveNewerSend = resolve;
+			},
+		);
+		let newerClientMessageID: string | undefined;
+		let sendCount = 0;
+		const sendSpy = spyOn(
+			API.experimental,
+			"createChatMessage",
+		).mockImplementation(async (_chatID, request) => {
+			sendCount += 1;
+			if (sendCount === 1) {
+				return originalSend;
+			}
+			newerClientMessageID = request.client_message_id;
+			return newerSend;
+		});
+
+		const editor = await canvas.findByTestId("chat-message-input");
+		await userEvent.click(editor);
+		await userEvent.type(editor, "Original chat prompt");
+		await userEvent.keyboard("{Enter}");
+		await waitFor(() => expect(sendSpy).toHaveBeenCalledTimes(1));
+
+		await userEvent.click(canvas.getByRole("button", { name: "Switch chat" }));
+		expect(await canvas.findByText("Current chat message")).toBeVisible();
+		const switchedEditor = await canvas.findByTestId("chat-message-input");
+		await userEvent.click(switchedEditor);
+		await userEvent.type(switchedEditor, "Newer optimistic prompt");
+		await userEvent.keyboard("{Enter}");
+		await waitFor(() => expect(sendSpy).toHaveBeenCalledTimes(2));
+		const timeline = within(await canvas.findByTestId("conversation-timeline"));
+		expect(await timeline.findByText("Newer optimistic prompt")).toBeVisible();
+
+		rejectOriginalSend?.(mockServerError);
+		await waitFor(() => {
+			expect(
+				canvas.getByRole("status", { name: "Original chat error" }),
+			).toHaveTextContent("Internal server error.");
+		});
+		expect(timeline.getByText("Newer optimistic prompt")).toBeVisible();
+		expect(
+			canvas.queryByRole("heading", { name: /request failed/i }),
+		).not.toBeInTheDocument();
+
+		resolveNewerSend?.({
+			queued: false,
+			message: {
+				...MockChatMessage,
+				id: 52,
+				chat_id: SWITCHED_CHAT_ID,
+				client_message_id: newerClientMessageID,
+				role: "user",
+				content: [{ type: "text", text: "Newer optimistic prompt" }],
+			},
+		});
+		await waitFor(() => {
+			expect(timeline.getByText("Newer optimistic prompt")).toBeVisible();
+		});
+	},
+};
+
 const mockErrorChat: TypesGen.Chat = {
 	...MockChat,
 	id: CHAT_ID,
@@ -3159,6 +3410,167 @@ const mockErrorChat: TypesGen.Chat = {
 const mockServerError = {
 	...mockApiError({ message: "Internal server error." }),
 	status: 500,
+};
+
+export const OptimisticMessageReconcilesInPlace: Story = {
+	parameters: {
+		queries: buildQueries(
+			{
+				id: CHAT_ID,
+				...baseChatFields,
+				title: "Optimistic message reconciliation",
+				status: "waiting",
+			},
+			{ messages: [], queued_messages: [], has_more: false },
+			{ diffUrl: undefined },
+		),
+	},
+	beforeEach: () => {
+		spyOn(API.experimental, "getUserSkills").mockResolvedValue([]);
+	},
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		const fixedClientMessageID = "22222222-2222-4222-8222-222222222222";
+		spyOn(crypto, "randomUUID").mockReturnValue(fixedClientMessageID);
+		let releaseSend: (() => void) | undefined;
+		const sendGate = new Promise<void>((resolve) => {
+			releaseSend = resolve;
+		});
+		const sendSpy = spyOn(
+			API.experimental,
+			"createChatMessage",
+		).mockImplementation(async (_chatID, request) => {
+			await sendGate;
+			return {
+				queued: false,
+				message: {
+					...MockChatMessage,
+					id: 80,
+					chat_id: CHAT_ID,
+					client_message_id: request.client_message_id,
+					role: "user",
+					created_at: "2026-08-12T00:00:00Z",
+					content: [{ type: "text", text: "Hook rewritten prompt" }],
+				},
+			};
+		});
+
+		const editor = await canvas.findByTestId("chat-message-input");
+		await userEvent.click(editor);
+		await userEvent.type(editor, "Original prompt");
+		await userEvent.keyboard("{Enter}");
+		await waitFor(() => expect(sendSpy).toHaveBeenCalledTimes(1));
+
+		const timeline = within(await canvas.findByTestId("conversation-timeline"));
+		const optimisticRow = await timeline.findByTestId(
+			`chat-message-client-message:${fixedClientMessageID}`,
+		);
+		expect(optimisticRow).toHaveTextContent("Original prompt");
+
+		releaseSend?.();
+		await waitFor(() => {
+			expect(timeline.getByText("Hook rewritten prompt")).toBeVisible();
+			expect(timeline.queryByText("Original prompt")).not.toBeInTheDocument();
+		});
+		expect(
+			timeline.getByTestId(
+				`chat-message-client-message:${fixedClientMessageID}`,
+			),
+		).toBe(optimisticRow);
+		expect(timeline.getAllByText("Hook rewritten prompt")).toHaveLength(1);
+	},
+};
+
+export const OptimisticQueuedMessageMovesToQueue: Story = {
+	parameters: {
+		queries: buildQueries(
+			{
+				id: CHAT_ID,
+				...baseChatFields,
+				title: "Queued optimistic message",
+				status: "running",
+			},
+			{ messages: [], queued_messages: [], has_more: false },
+			{ diffUrl: undefined },
+		),
+	},
+	beforeEach: () => {
+		spyOn(API.experimental, "getUserSkills").mockResolvedValue([]);
+	},
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		let releaseSend: (() => void) | undefined;
+		const sendGate = new Promise<void>((resolve) => {
+			releaseSend = resolve;
+		});
+		spyOn(API.experimental, "createChatMessage").mockImplementation(
+			async (_chatID, request) => {
+				await sendGate;
+				return {
+					queued: true,
+					queued_message: {
+						...MockChatQueuedMessage,
+						id: 81,
+						chat_id: CHAT_ID,
+						client_message_id: request.client_message_id,
+						created_at: "2026-08-12T00:00:00Z",
+						content: [{ type: "text", text: "Queued prompt" }],
+					},
+				};
+			},
+		);
+
+		const editor = await canvas.findByTestId("chat-message-input");
+		await userEvent.click(editor);
+		await userEvent.type(editor, "Queued prompt");
+		await userEvent.keyboard("{Enter}");
+		const timeline = within(await canvas.findByTestId("conversation-timeline"));
+		expect(await timeline.findByText("Queued prompt")).toBeVisible();
+
+		releaseSend?.();
+		await waitFor(() => {
+			expect(timeline.queryByText("Queued prompt")).not.toBeInTheDocument();
+			expect(canvas.getByText("Queued prompt")).toBeVisible();
+		});
+	},
+};
+
+export const OptimisticFailedMessageRollsBack: Story = {
+	parameters: {
+		queries: buildQueries(
+			{
+				id: CHAT_ID,
+				...baseChatFields,
+				title: "Failed optimistic message",
+				status: "waiting",
+			},
+			{ messages: [], queued_messages: [], has_more: false },
+			{ diffUrl: undefined },
+		),
+	},
+	beforeEach: () => {
+		spyOn(API.experimental, "getUserSkills").mockResolvedValue([]);
+	},
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		let rejectSend: ((reason: unknown) => void) | undefined;
+		const sendGate = new Promise<never>((_resolve, reject) => {
+			rejectSend = reject;
+		});
+		spyOn(API.experimental, "createChatMessage").mockReturnValue(sendGate);
+
+		const editor = await canvas.findByTestId("chat-message-input");
+		await userEvent.click(editor);
+		await userEvent.type(editor, "Failed prompt");
+		await userEvent.keyboard("{Enter}");
+		const timeline = within(await canvas.findByTestId("conversation-timeline"));
+		expect(await timeline.findByText("Failed prompt")).toBeVisible();
+
+		rejectSend?.(mockServerError);
+		await waitFor(() => {
+			expect(timeline.queryByText("Failed prompt")).not.toBeInTheDocument();
+		});
+	},
 };
 
 export const DetailQueryError: Story = {

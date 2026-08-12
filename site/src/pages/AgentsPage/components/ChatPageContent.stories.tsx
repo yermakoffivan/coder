@@ -1,9 +1,12 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, within } from "storybook/test";
+import { expect, userEvent, waitFor, within } from "storybook/test";
 import type * as TypesGen from "#/api/typesGenerated";
 import { ChatWorkspaceContext } from "../context/ChatWorkspaceContext";
 import { createChatStore } from "./ChatConversation/chatStore";
-import { FIXTURE_NOW } from "./ChatConversation/storyFixtures";
+import {
+	buildStreamRenderState,
+	FIXTURE_NOW,
+} from "./ChatConversation/storyFixtures";
 import { ChatPageTimeline } from "./ChatPageContent";
 
 const meta = {
@@ -43,6 +46,102 @@ const buildThinkingSpacerStore = () => {
 	]);
 
 	return store;
+};
+
+const reconciliationStore = createChatStore();
+
+export const AssistantStreamReconcilesInPlace: Story = {
+	render: () => {
+		reconciliationStore.replaceMessages([
+			buildMessage(1, "user", [{ type: "text", text: "Read the files" }]),
+			buildMessage(2, "assistant", [
+				{
+					type: "tool-call",
+					tool_call_id: "read-file-0",
+					tool_name: "read_file",
+					args: { path: "CONTRIBUTING.md" },
+				},
+				{
+					type: "tool-result",
+					tool_call_id: "read-file-0",
+					tool_name: "read_file",
+					result: { content: "Existing durable content" },
+				},
+			]),
+		]);
+		reconciliationStore.clearStreamState();
+		reconciliationStore.setChatStatus("running");
+		reconciliationStore.applyMessageParts([
+			{
+				type: "tool-call",
+				tool_call_id: "read-file-1",
+				tool_name: "read_file",
+				args: { path: "README.md" },
+			},
+			{
+				type: "tool-result",
+				tool_call_id: "read-file-1",
+				tool_name: "read_file",
+				result: { content: "Durable content" },
+			},
+		]);
+
+		return (
+			<ChatPageTimeline
+				store={reconciliationStore}
+				persistedError={undefined}
+			/>
+		);
+	},
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		const button = await canvas.findByRole("button", {
+			name: /read README\.md/i,
+		});
+		expect(
+			canvas.getByRole("button", { name: /read CONTRIBUTING\.md/i }),
+		).toBeVisible();
+		const row = canvas.getByTestId("chat-message-message:1:assistant:1");
+		await userEvent.click(button);
+		button.focus();
+		expect(button).toHaveAttribute("aria-expanded", "true");
+		expect(button).toHaveFocus();
+
+		reconciliationStore.batch(() => {
+			reconciliationStore.upsertDurableMessages([
+				buildMessage(3, "assistant", [
+					{
+						type: "tool-call",
+						tool_call_id: "read-file-1",
+						tool_name: "read_file",
+						args: { path: "README.md" },
+					},
+					{
+						type: "tool-result",
+						tool_call_id: "read-file-1",
+						tool_name: "read_file",
+						result: { content: "Durable content" },
+					},
+				]),
+			]);
+			reconciliationStore.clearStreamState();
+			reconciliationStore.setChatStatus("waiting");
+		});
+
+		await waitFor(() => {
+			const durableButton = canvas.getByRole("button", {
+				name: /read README\.md/i,
+			});
+			expect(canvas.getByTestId("chat-message-message:1:assistant:1")).toBe(
+				row,
+			);
+			expect(durableButton).toHaveAttribute("aria-expanded", "true");
+			expect(durableButton).toHaveFocus();
+			expect(
+				canvas.getAllByRole("button", { name: /read README\.md/i }),
+			).toHaveLength(1);
+		});
+	},
 };
 
 export const SpacerVisibleWhenNotStreaming: Story = {
@@ -85,6 +184,28 @@ export const DurableUnresolvedWorkspaceToolRuns: Story = {
 		expect(canvas.getByText("Creating workspace…")).toBeInTheDocument();
 		expect(canvas.queryByText("Created workspace")).toBeNull();
 		expect(canvas.getByText("Loading build logs…")).toBeInTheDocument();
+	},
+};
+
+export const AssistantOnlyLiveOutputUsesFallbackKey: Story = {
+	render: () => {
+		const store = createChatStore();
+		const stream = buildStreamRenderState([
+			{ type: "text", text: "Assistant output without a user row." },
+		]);
+		store.setStreamState(stream.streamState);
+		store.setChatStatus("running");
+
+		return <ChatPageTimeline store={store} persistedError={undefined} />;
+	},
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		await waitFor(() => {
+			expect(
+				canvas.getByText("Assistant output without a user row."),
+			).toBeVisible();
+		});
+		expect(canvas.getByTestId("chat-message-live-assistant")).toBeVisible();
 	},
 };
 

@@ -27,19 +27,29 @@ import {
 	selectHasStreamState,
 	selectIsAwaitingFirstStreamChunk,
 	selectMessagesByID,
+	selectOptimisticUserMessage,
 	selectOrderedMessageIDs,
 	selectQueuedMessages,
+	selectReconnectState,
+	selectRetryState,
+	selectStreamError,
+	selectStreamState,
+	selectSubagentStatusOverrides,
 	useChatSelector,
 	type useChatStore,
 } from "./ChatConversation/chatStore";
-import { LiveStreamTail } from "./ChatConversation/LiveStreamTail";
+import { LiveStreamTailContent } from "./ChatConversation/LiveStreamTail";
+import { deriveLiveStatus } from "./ChatConversation/liveStatusModel";
 import {
 	buildSubagentMaps,
 	getPendingToolCallIDs,
 	parseMessagesWithMergedTools,
 } from "./ChatConversation/messageParsing";
+import { buildStreamTools } from "./ChatConversation/streamState";
+import type { RenderableChatMessage } from "./ChatConversation/types";
 import { useOnRenderProfiler } from "./ChatConversation/useOnRenderProfiler";
 import type { ModelSelectorOption } from "./ChatElements";
+
 import type { SkillMetadata } from "./ChatMessageInput/SkillsTriggerMenu";
 
 type ChatStoreHandle = ReturnType<typeof useChatStore>["store"];
@@ -103,6 +113,10 @@ export const ChatPageTimeline: FC<ChatPageTimelineProps> = ({
 	const [chatFullWidth] = useChatFullWidth();
 	const messagesByID = useChatSelector(store, selectMessagesByID);
 	const orderedMessageIDs = useChatSelector(store, selectOrderedMessageIDs);
+	const optimisticUserMessage = useChatSelector(
+		store,
+		selectOptimisticUserMessage,
+	);
 	const chatStatus = useChatSelector(store, selectChatStatus);
 	const hasStream = useChatSelector(store, selectHasStreamState);
 	const isAwaitingFirstStreamChunk = useChatSelector(
@@ -111,19 +125,32 @@ export const ChatPageTimeline: FC<ChatPageTimelineProps> = ({
 	);
 	const isChatCompleted = !hasStream;
 
-	const messages = orderedMessageIDs
-		.map((messageID) => {
-			const message = messagesByID.get(messageID);
-			if (!message && process.env.NODE_ENV !== "production") {
-				console.warn(
-					`[ChatPageContent] orderedMessageIDs contains ID ${messageID} ` +
-						"not found in messagesByID. This may indicate a store/cache " +
-						"desync bug.",
-				);
-			}
-			return message;
-		})
+	const messages: RenderableChatMessage[] = orderedMessageIDs
+		.map((messageID) => messagesByID.get(messageID))
 		.filter(isChatMessage);
+	if (optimisticUserMessage) {
+		messages.push(optimisticUserMessage);
+	}
+	const streamState = useChatSelector(store, selectStreamState);
+	const streamError = useChatSelector(store, selectStreamError);
+	const retryState = useChatSelector(store, selectRetryState);
+	const reconnectState = useChatSelector(store, selectReconnectState);
+	const subagentStatusOverrides = useChatSelector(
+		store,
+		selectSubagentStatusOverrides,
+	);
+	const liveStatus = deriveLiveStatus({
+		streamState,
+		retryState,
+		reconnectState,
+		streamError,
+		persistedError: persistedError ?? null,
+		isAwaitingFirstStreamChunk,
+	});
+	const streamTools = buildStreamTools(
+		streamState?.toolCalls,
+		streamState?.toolResults,
+	);
 	const pendingToolCallIDs = getPendingToolCallIDs(messages, chatStatus);
 	const parsedMessages = parseMessagesWithMergedTools(messages, {
 		pendingToolCallIDs,
@@ -148,6 +175,10 @@ export const ChatPageTimeline: FC<ChatPageTimelineProps> = ({
 					   renders correctly. */}
 				<ConversationTimeline
 					parsedMessages={parsedMessages}
+					streamState={streamState}
+					streamTools={streamTools}
+					liveStatus={liveStatus}
+					subagentStatusOverrides={subagentStatusOverrides}
 					subagentTitles={subagentTitles}
 					subagentVariants={subagentVariants}
 					onEditUserMessage={onEditUserMessage}
@@ -161,14 +192,9 @@ export const ChatPageTimeline: FC<ChatPageTimelineProps> = ({
 					mcpServers={mcpServers}
 					showDesktopPreviews={false}
 				/>
-				<LiveStreamTail
-					store={store}
-					persistedError={persistedError}
+				<LiveStreamTailContent
 					isTranscriptEmpty={parsedMessages.length === 0}
-					subagentTitles={subagentTitles}
-					subagentVariants={subagentVariants}
-					urlTransform={urlTransform}
-					mcpServers={mcpServers}
+					liveStatus={liveStatus}
 				/>
 			</div>
 		</Profiler>

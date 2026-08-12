@@ -2684,24 +2684,17 @@ export const SequentialReadFilesCollapsed: Story = {
 	},
 	play: async ({ canvasElement }) => {
 		const canvas = within(canvasElement);
-		const groupButton = canvas.getByRole("button", { name: /read 3 files/i });
-		expect(groupButton).toBeInTheDocument();
-		expect(
-			canvas.queryByRole("button", { name: /read a\.ts/i }),
-		).not.toBeInTheDocument();
-		await userEvent.click(groupButton);
-		await waitFor(() => {
-			expect(canvas.getByRole("button", { name: /read a\.ts/i })).toBeVisible();
-			expect(canvas.getByRole("button", { name: /read b\.ts/i })).toBeVisible();
-			expect(canvas.getByRole("button", { name: /read c\.ts/i })).toBeVisible();
-		});
-		const firstFileButton = canvas.getByRole("button", { name: /read a\.ts/i });
-		expect(firstFileButton).toHaveAttribute("aria-expanded", "false");
-
-		await userEvent.click(firstFileButton);
-		await waitFor(() => {
-			expect(firstFileButton).toHaveAttribute("aria-expanded", "true");
-		});
+		const buttons = ["a.ts", "b.ts", "c.ts"].map((file) =>
+			canvas.getByRole("button", {
+				name: new RegExp(`read ${file.replace(".", "\\.")}`, "i"),
+			}),
+		);
+		for (const button of buttons) {
+			expect(button).toHaveAttribute("aria-expanded", "false");
+		}
+		await userEvent.click(buttons[0]);
+		expect(buttons[0]).toHaveAttribute("aria-expanded", "true");
+		expect(buttons[1]).toHaveAttribute("aria-expanded", "false");
 	},
 };
 
@@ -2725,7 +2718,7 @@ export const ReadFileRewrittenByHook: Story = {
 	},
 };
 
-export const GroupedReadFilesRewrittenByHook: Story = {
+export const SequentialReadFilesRewrittenByHook: Story = {
 	args: {
 		...defaultArgs,
 		parsedMessages: [
@@ -2746,25 +2739,15 @@ export const GroupedReadFilesRewrittenByHook: Story = {
 			}),
 		],
 	},
-	play: async ({ canvasElement, step }) => {
+	play: async ({ canvasElement }) => {
 		const canvas = within(canvasElement);
-		await step("group header shows the aggregate badge", async () => {
-			expect(await canvas.findByText("Modified by policy")).toBeVisible();
-		});
-		await step("expanded rows credit only the rewritten file", async () => {
-			await userEvent.click(
-				await canvas.findByRole("button", { name: /Read 2 files/ }),
-			);
-			expect(
-				await canvas.findByRole("button", { name: /Read b\.ts/ }),
-			).toBeVisible();
-			const attributed = canvas
-				.getAllByRole("group", { name: "Modified by policy" })
-				.map((group) => group.textContent ?? "");
-			expect(attributed.some((text) => text.includes("b.ts"))).toBe(true);
-			expect(attributed.some((text) => text.includes("a.ts"))).toBe(false);
-			expect(canvas.getAllByText("Modified by policy")).toHaveLength(2);
-		});
+		expect(
+			await canvas.findByRole("button", { name: /Read a\.ts/ }),
+		).toBeVisible();
+		expect(
+			await canvas.findByRole("button", { name: /Read b\.ts/ }),
+		).toBeVisible();
+		expect(canvas.getAllByText("Modified by policy")).toHaveLength(1);
 	},
 };
 
@@ -2830,33 +2813,20 @@ export const SequentialReadFilesEmptyAndErrorStates: Story = {
 	},
 	play: async ({ canvasElement }) => {
 		const canvas = within(canvasElement);
-		const buttons = canvas.getAllByRole("button", { name: /read 2 files/i });
-		expect(buttons).toHaveLength(2);
-
-		await userEvent.click(buttons[0]);
-		await waitFor(() => {
-			expect(canvas.getByText("Read empty-a.ts")).toBeVisible();
-			expect(canvas.getByText("Read empty-b.ts")).toBeVisible();
-		});
-
-		await userEvent.click(buttons[1]);
-		await waitFor(() => {
-			expect(
-				canvas.getByRole("button", { name: /read missing-a\.ts/i }),
-			).toBeVisible();
-			expect(
-				canvas.getByRole("button", { name: /read missing-b\.ts/i }),
-			).toBeVisible();
-		});
-
-		await userEvent.click(
-			canvas.getByRole("button", { name: /read missing-a\.ts/i }),
-		);
-		await waitFor(() => {
-			expect(
-				canvas.getByText("ENOENT: no such file or directory"),
-			).toBeVisible();
-		});
+		for (const file of [
+			"empty-a.ts",
+			"empty-b.ts",
+			"missing-a.ts",
+			"missing-b.ts",
+		]) {
+			expect(canvas.getByText(new RegExp(file))).toBeVisible();
+		}
+		expect(
+			canvas.getByRole("img", { name: "ENOENT: no such file or directory" }),
+		).toBeVisible();
+		expect(
+			canvas.getByRole("img", { name: "permission denied" }),
+		).toBeVisible();
 	},
 };
 
@@ -2886,9 +2856,12 @@ export const SequentialReadFilesRunningState: Story = {
 	},
 	play: async ({ canvasElement }) => {
 		const canvas = within(canvasElement);
+		for (const file of ["one.ts", "two.ts", "three.ts"]) {
+			expect(canvas.getByText(new RegExp(`Reading ${file}`))).toBeVisible();
+		}
 		expect(
-			canvas.getByRole("button", { name: /reading 3 files/i }),
-		).toBeInTheDocument();
+			canvas.getAllByRole("img", { name: "Tool call running" }),
+		).toHaveLength(3);
 	},
 };
 

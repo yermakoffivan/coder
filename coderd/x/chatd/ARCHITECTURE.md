@@ -445,6 +445,8 @@ Other execution-state classes are not supported for archive/unarchive.
 
 ### `POST /api/experimental/chats/{chat}/messages`
 
+A non-null `client_message_id` identifies one submission within a chat. `SendMessage` rejects IDs already present in active durable history or the queue. This rejection is a conflict, not an idempotent resend. Edited replacement rows do not inherit the original ID.
+
 For `busy_behavior=queue`, `SendMessage(m, queue)` supports:
 
 - `W -> SendMessage(m, queue) -> R0`

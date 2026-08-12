@@ -14,6 +14,7 @@ import type {
 	ParsedMessageEntry,
 	ParsedToolCall,
 	ParsedToolResult,
+	RenderableChatMessage,
 	RenderBlock,
 } from "./types";
 
@@ -96,7 +97,7 @@ const chatHasActiveToolCalls = (status: TypesGen.ChatStatus | null): boolean =>
 	status === "running" || status === "requires_action";
 
 export const getPendingToolCallIDs = (
-	messages: readonly TypesGen.ChatMessage[],
+	messages: readonly RenderableChatMessage[],
 	chatStatus: TypesGen.ChatStatus | null,
 ): ReadonlySet<string> | undefined => {
 	if (!chatHasActiveToolCalls(chatStatus)) {
@@ -321,7 +322,7 @@ const isEditableUserMessageFileBlock = (
 	block.type === "file" && isEditableAttachmentMediaType(block.media_type);
 
 export const getEditableUserMessagePayload = (
-	message: TypesGen.ChatMessage,
+	message: RenderableChatMessage,
 ): {
 	text: string;
 	fileBlocks: readonly TypesGen.ChatMessagePart[] | undefined;
@@ -345,7 +346,7 @@ type ParseMessagesWithMergedToolsOptions = {
 };
 
 export const parseMessagesWithMergedTools = (
-	messages: readonly TypesGen.ChatMessage[],
+	messages: readonly RenderableChatMessage[],
 	options: ParseMessagesWithMergedToolsOptions = {},
 ): ParsedMessageEntry[] => {
 	const rawParsed = messages.map((message) => ({

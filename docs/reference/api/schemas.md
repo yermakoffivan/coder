@@ -2864,6 +2864,7 @@ AuthorizationObject can represent a "set" of objects, such as: all workspaces in
 ```json
 {
   "chat_id": "efc9fe20-a1e5-4a8c-9c48-f1b30c1e4f86",
+  "client_message_id": "94a38f22-8fc5-4aec-a7cd-27937477340c",
   "content": [
     {
       "args": [
@@ -2947,16 +2948,17 @@ AuthorizationObject can represent a "set" of objects, such as: all workspaces in
 
 ### Properties
 
-| Name              | Type                                                          | Required | Restrictions | Description |
-|-------------------|---------------------------------------------------------------|----------|--------------|-------------|
-| `chat_id`         | string                                                        | false    |              |             |
-| `content`         | array of [codersdk.ChatMessagePart](#codersdkchatmessagepart) | false    |              |             |
-| `created_at`      | string                                                        | false    |              |             |
-| `created_by`      | string                                                        | false    |              |             |
-| `id`              | integer                                                       | false    |              |             |
-| `model_config_id` | string                                                        | false    |              |             |
-| `role`            | [codersdk.ChatMessageRole](#codersdkchatmessagerole)          | false    |              |             |
-| `usage`           | [codersdk.ChatMessageUsage](#codersdkchatmessageusage)        | false    |              |             |
+| Name                | Type                                                          | Required | Restrictions | Description |
+|---------------------|---------------------------------------------------------------|----------|--------------|-------------|
+| `chat_id`           | string                                                        | false    |              |             |
+| `client_message_id` | string                                                        | false    |              |             |
+| `content`           | array of [codersdk.ChatMessagePart](#codersdkchatmessagepart) | false    |              |             |
+| `created_at`        | string                                                        | false    |              |             |
+| `created_by`        | string                                                        | false    |              |             |
+| `id`                | integer                                                       | false    |              |             |
+| `model_config_id`   | string                                                        | false    |              |             |
+| `role`              | [codersdk.ChatMessageRole](#codersdkchatmessagerole)          | false    |              |             |
+| `usage`             | [codersdk.ChatMessageUsage](#codersdkchatmessageusage)        | false    |              |             |
 
 ## codersdk.ChatMessagePart
 
@@ -3131,6 +3133,7 @@ AuthorizationObject can represent a "set" of objects, such as: all workspaces in
   "messages": [
     {
       "chat_id": "efc9fe20-a1e5-4a8c-9c48-f1b30c1e4f86",
+      "client_message_id": "94a38f22-8fc5-4aec-a7cd-27937477340c",
       "content": [
         {
           "args": [
@@ -3214,6 +3217,7 @@ AuthorizationObject can represent a "set" of objects, such as: all workspaces in
   "queued_messages": [
     {
       "chat_id": "efc9fe20-a1e5-4a8c-9c48-f1b30c1e4f86",
+      "client_message_id": "94a38f22-8fc5-4aec-a7cd-27937477340c",
       "content": [
         {
           "args": [
@@ -3444,6 +3448,7 @@ AuthorizationObject can represent a "set" of objects, such as: all workspaces in
 ```json
 {
   "chat_id": "efc9fe20-a1e5-4a8c-9c48-f1b30c1e4f86",
+  "client_message_id": "94a38f22-8fc5-4aec-a7cd-27937477340c",
   "content": [
     {
       "args": [
@@ -3516,13 +3521,14 @@ AuthorizationObject can represent a "set" of objects, such as: all workspaces in
 
 ### Properties
 
-| Name              | Type                                                          | Required | Restrictions | Description |
-|-------------------|---------------------------------------------------------------|----------|--------------|-------------|
-| `chat_id`         | string                                                        | false    |              |             |
-| `content`         | array of [codersdk.ChatMessagePart](#codersdkchatmessagepart) | false    |              |             |
-| `created_at`      | string                                                        | false    |              |             |
-| `id`              | integer                                                       | false    |              |             |
-| `model_config_id` | string                                                        | false    |              |             |
+| Name                | Type                                                          | Required | Restrictions | Description |
+|---------------------|---------------------------------------------------------------|----------|--------------|-------------|
+| `chat_id`           | string                                                        | false    |              |             |
+| `client_message_id` | string                                                        | false    |              |             |
+| `content`           | array of [codersdk.ChatMessagePart](#codersdkchatmessagepart) | false    |              |             |
+| `created_at`        | string                                                        | false    |              |             |
+| `id`                | integer                                                       | false    |              |             |
+| `model_config_id`   | string                                                        | false    |              |             |
 
 ## codersdk.ChatRetentionDaysResponse
 
@@ -3610,6 +3616,7 @@ AuthorizationObject can represent a "set" of objects, such as: all workspaces in
   },
   "message": {
     "chat_id": "efc9fe20-a1e5-4a8c-9c48-f1b30c1e4f86",
+    "client_message_id": "94a38f22-8fc5-4aec-a7cd-27937477340c",
     "content": [
       {
         "args": [
@@ -3760,6 +3767,7 @@ AuthorizationObject can represent a "set" of objects, such as: all workspaces in
   "queued_messages": [
     {
       "chat_id": "efc9fe20-a1e5-4a8c-9c48-f1b30c1e4f86",
+      "client_message_id": "94a38f22-8fc5-4aec-a7cd-27937477340c",
       "content": [
         {
           "args": [
@@ -4537,6 +4545,7 @@ AuthorizationObject can represent a "set" of objects, such as: all workspaces in
 ```json
 {
   "busy_behavior": "queue",
+  "client_message_id": "94a38f22-8fc5-4aec-a7cd-27937477340c",
   "content": [
     {
       "content": "string",
@@ -4559,14 +4568,15 @@ AuthorizationObject can represent a "set" of objects, such as: all workspaces in
 
 ### Properties
 
-| Name               | Type                                                      | Required | Restrictions | Description                                                                                                  |
-|--------------------|-----------------------------------------------------------|----------|--------------|--------------------------------------------------------------------------------------------------------------|
-| `busy_behavior`    | [codersdk.ChatBusyBehavior](#codersdkchatbusybehavior)    | false    |              |                                                                                                              |
-| `content`          | array of [codersdk.ChatInputPart](#codersdkchatinputpart) | false    |              |                                                                                                              |
-| `mcp_server_ids`   | array of string                                           | false    |              |                                                                                                              |
-| `model_config_id`  | string                                                    | false    |              |                                                                                                              |
-| `plan_mode`        | [codersdk.ChatPlanMode](#codersdkchatplanmode)            | false    |              | Plan mode switches the chat's persistent plan mode. nil: no change, ptr to "plan": enable, ptr to "": clear. |
-| `reasoning_effort` | string                                                    | false    |              |                                                                                                              |
+| Name                | Type                                                      | Required | Restrictions | Description                                                                                                  |
+|---------------------|-----------------------------------------------------------|----------|--------------|--------------------------------------------------------------------------------------------------------------|
+| `busy_behavior`     | [codersdk.ChatBusyBehavior](#codersdkchatbusybehavior)    | false    |              |                                                                                                              |
+| `client_message_id` | string                                                    | false    |              |                                                                                                              |
+| `content`           | array of [codersdk.ChatInputPart](#codersdkchatinputpart) | false    |              |                                                                                                              |
+| `mcp_server_ids`    | array of string                                           | false    |              |                                                                                                              |
+| `model_config_id`   | string                                                    | false    |              |                                                                                                              |
+| `plan_mode`         | [codersdk.ChatPlanMode](#codersdkchatplanmode)            | false    |              | Plan mode switches the chat's persistent plan mode. nil: no change, ptr to "plan": enable, ptr to "": clear. |
+| `reasoning_effort`  | string                                                    | false    |              |                                                                                                              |
 
 #### Enumerated Values
 
@@ -4580,6 +4590,7 @@ AuthorizationObject can represent a "set" of objects, such as: all workspaces in
 {
   "message": {
     "chat_id": "efc9fe20-a1e5-4a8c-9c48-f1b30c1e4f86",
+    "client_message_id": "94a38f22-8fc5-4aec-a7cd-27937477340c",
     "content": [
       {
         "args": [
@@ -4662,6 +4673,7 @@ AuthorizationObject can represent a "set" of objects, such as: all workspaces in
   "messages": [
     {
       "chat_id": "efc9fe20-a1e5-4a8c-9c48-f1b30c1e4f86",
+      "client_message_id": "94a38f22-8fc5-4aec-a7cd-27937477340c",
       "content": [
         {
           "args": [
@@ -4745,6 +4757,7 @@ AuthorizationObject can represent a "set" of objects, such as: all workspaces in
   "queued": true,
   "queued_message": {
     "chat_id": "efc9fe20-a1e5-4a8c-9c48-f1b30c1e4f86",
+    "client_message_id": "94a38f22-8fc5-4aec-a7cd-27937477340c",
     "content": [
       {
         "args": [
@@ -7286,6 +7299,7 @@ CreateWorkspaceRequest provides options for creating a new workspace. Only one o
   ],
   "message": {
     "chat_id": "efc9fe20-a1e5-4a8c-9c48-f1b30c1e4f86",
+    "client_message_id": "94a38f22-8fc5-4aec-a7cd-27937477340c",
     "content": [
       {
         "args": [
@@ -7368,6 +7382,7 @@ CreateWorkspaceRequest provides options for creating a new workspace. Only one o
   "messages": [
     {
       "chat_id": "efc9fe20-a1e5-4a8c-9c48-f1b30c1e4f86",
+      "client_message_id": "94a38f22-8fc5-4aec-a7cd-27937477340c",
       "content": [
         {
           "args": [

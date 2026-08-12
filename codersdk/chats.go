@@ -244,14 +244,15 @@ type ChatFileMetadata struct {
 
 // ChatMessage represents a single message in a chat.
 type ChatMessage struct {
-	ID            int64             `json:"id"`
-	ChatID        uuid.UUID         `json:"chat_id" format:"uuid"`
-	CreatedBy     *uuid.UUID        `json:"created_by,omitempty" format:"uuid"`
-	ModelConfigID *uuid.UUID        `json:"model_config_id,omitempty" format:"uuid"`
-	CreatedAt     time.Time         `json:"created_at" format:"date-time"`
-	Role          ChatMessageRole   `json:"role"`
-	Content       []ChatMessagePart `json:"content,omitempty"`
-	Usage         *ChatMessageUsage `json:"usage,omitempty"`
+	ID              int64             `json:"id"`
+	ChatID          uuid.UUID         `json:"chat_id" format:"uuid"`
+	CreatedBy       *uuid.UUID        `json:"created_by,omitempty" format:"uuid"`
+	ClientMessageID *uuid.UUID        `json:"client_message_id,omitempty" format:"uuid"`
+	ModelConfigID   *uuid.UUID        `json:"model_config_id,omitempty" format:"uuid"`
+	CreatedAt       time.Time         `json:"created_at" format:"date-time"`
+	Role            ChatMessageRole   `json:"role"`
+	Content         []ChatMessagePart `json:"content,omitempty"`
+	Usage           *ChatMessageUsage `json:"usage,omitempty"`
 }
 
 // ChatMessageUsage contains token usage information for a chat message.
@@ -623,10 +624,11 @@ const (
 
 // CreateChatMessageRequest is the request to add a message to a chat.
 type CreateChatMessageRequest struct {
-	Content       []ChatInputPart  `json:"content"`
-	ModelConfigID *uuid.UUID       `json:"model_config_id,omitempty" format:"uuid"`
-	MCPServerIDs  *[]uuid.UUID     `json:"mcp_server_ids,omitempty" format:"uuid"`
-	BusyBehavior  ChatBusyBehavior `json:"busy_behavior,omitempty" enums:"queue,interrupt"`
+	Content         []ChatInputPart  `json:"content"`
+	ClientMessageID *uuid.UUID       `json:"client_message_id,omitempty" format:"uuid"`
+	ModelConfigID   *uuid.UUID       `json:"model_config_id,omitempty" format:"uuid"`
+	MCPServerIDs    *[]uuid.UUID     `json:"mcp_server_ids,omitempty" format:"uuid"`
+	BusyBehavior    ChatBusyBehavior `json:"busy_behavior,omitempty" enums:"queue,interrupt"`
 	// PlanMode switches the chat's persistent plan mode.
 	// nil: no change, ptr to "plan": enable, ptr to "": clear.
 	PlanMode        *ChatPlanMode `json:"plan_mode,omitempty"`
@@ -1660,11 +1662,12 @@ const (
 
 // ChatQueuedMessage represents a queued message waiting to be processed.
 type ChatQueuedMessage struct {
-	ID            int64             `json:"id"`
-	ChatID        uuid.UUID         `json:"chat_id" format:"uuid"`
-	ModelConfigID *uuid.UUID        `json:"model_config_id,omitempty" format:"uuid"`
-	Content       []ChatMessagePart `json:"content"`
-	CreatedAt     time.Time         `json:"created_at" format:"date-time"`
+	ID              int64             `json:"id"`
+	ChatID          uuid.UUID         `json:"chat_id" format:"uuid"`
+	ClientMessageID *uuid.UUID        `json:"client_message_id,omitempty" format:"uuid"`
+	ModelConfigID   *uuid.UUID        `json:"model_config_id,omitempty" format:"uuid"`
+	Content         []ChatMessagePart `json:"content"`
+	CreatedAt       time.Time         `json:"created_at" format:"date-time"`
 }
 
 // ChatStreamMessagePart is a streamed message part update.

@@ -1654,6 +1654,7 @@ Experimental: this endpoint is subject to change.
   "messages": [
     {
       "chat_id": "efc9fe20-a1e5-4a8c-9c48-f1b30c1e4f86",
+      "client_message_id": "94a38f22-8fc5-4aec-a7cd-27937477340c",
       "content": [
         {
           "args": [
@@ -1737,6 +1738,7 @@ Experimental: this endpoint is subject to change.
   "queued_messages": [
     {
       "chat_id": "efc9fe20-a1e5-4a8c-9c48-f1b30c1e4f86",
+      "client_message_id": "94a38f22-8fc5-4aec-a7cd-27937477340c",
       "content": [
         {
           "args": [
@@ -1838,6 +1840,7 @@ Experimental: this endpoint is subject to change.
 ```json
 {
   "busy_behavior": "queue",
+  "client_message_id": "94a38f22-8fc5-4aec-a7cd-27937477340c",
   "content": [
     {
       "content": "string",
@@ -1873,6 +1876,7 @@ Experimental: this endpoint is subject to change.
 {
   "message": {
     "chat_id": "efc9fe20-a1e5-4a8c-9c48-f1b30c1e4f86",
+    "client_message_id": "94a38f22-8fc5-4aec-a7cd-27937477340c",
     "content": [
       {
         "args": [
@@ -1955,6 +1959,7 @@ Experimental: this endpoint is subject to change.
   "messages": [
     {
       "chat_id": "efc9fe20-a1e5-4a8c-9c48-f1b30c1e4f86",
+      "client_message_id": "94a38f22-8fc5-4aec-a7cd-27937477340c",
       "content": [
         {
           "args": [
@@ -2038,6 +2043,7 @@ Experimental: this endpoint is subject to change.
   "queued": true,
   "queued_message": {
     "chat_id": "efc9fe20-a1e5-4a8c-9c48-f1b30c1e4f86",
+    "client_message_id": "94a38f22-8fc5-4aec-a7cd-27937477340c",
     "content": [
       {
         "args": [
@@ -2175,6 +2181,7 @@ Experimental: this endpoint is subject to change.
   ],
   "message": {
     "chat_id": "efc9fe20-a1e5-4a8c-9c48-f1b30c1e4f86",
+    "client_message_id": "94a38f22-8fc5-4aec-a7cd-27937477340c",
     "content": [
       {
         "args": [
@@ -2257,6 +2264,7 @@ Experimental: this endpoint is subject to change.
   "messages": [
     {
       "chat_id": "efc9fe20-a1e5-4a8c-9c48-f1b30c1e4f86",
+      "client_message_id": "94a38f22-8fc5-4aec-a7cd-27937477340c",
       "content": [
         {
           "args": [
@@ -2682,6 +2690,7 @@ Experimental: this endpoint is subject to change.
   },
   "message": {
     "chat_id": "efc9fe20-a1e5-4a8c-9c48-f1b30c1e4f86",
+    "client_message_id": "94a38f22-8fc5-4aec-a7cd-27937477340c",
     "content": [
       {
         "args": [
@@ -2832,6 +2841,7 @@ Experimental: this endpoint is subject to change.
   "queued_messages": [
     {
       "chat_id": "efc9fe20-a1e5-4a8c-9c48-f1b30c1e4f86",
+      "client_message_id": "94a38f22-8fc5-4aec-a7cd-27937477340c",
       "content": [
         {
           "args": [

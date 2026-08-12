@@ -12472,9 +12472,11 @@ func TestInsertChatMessages(t *testing.T) {
 		t.Parallel()
 
 		store, ctx, user, chat, _, modelConfigA := setupChat(t)
+		clientMessageID := uuid.New()
 		msgs, err := store.InsertChatMessages(ctx, database.InsertChatMessagesParams{
 			ChatID:              chat.ID,
 			CreatedBy:           []uuid.UUID{user.ID, uuid.Nil, uuid.Nil},
+			ClientMessageID:     []uuid.UUID{clientMessageID, uuid.Nil, uuid.Nil},
 			ModelConfigID:       []uuid.UUID{modelConfigA.ID, modelConfigA.ID, modelConfigA.ID},
 			Role:                []database.ChatMessageRole{database.ChatMessageRoleUser, database.ChatMessageRoleAssistant, database.ChatMessageRoleTool},
 			ContentVersion:      []int16{chatprompt.CurrentContentVersion, chatprompt.CurrentContentVersion, chatprompt.CurrentContentVersion},
@@ -12508,6 +12510,10 @@ func TestInsertChatMessages(t *testing.T) {
 		// Assistant and tool messages have NULL CreatedBy.
 		require.False(t, msgs[1].CreatedBy.Valid)
 		require.False(t, msgs[2].CreatedBy.Valid)
+		require.True(t, msgs[0].ClientMessageID.Valid)
+		require.Equal(t, clientMessageID, msgs[0].ClientMessageID.UUID)
+		require.False(t, msgs[1].ClientMessageID.Valid)
+		require.False(t, msgs[2].ClientMessageID.Valid)
 
 		// Verify token fields stored as NULL when zero.
 		require.True(t, msgs[0].InputTokens.Valid)

@@ -3,7 +3,12 @@ import { useSyncExternalStore } from "react";
 import type * as TypesGen from "#/api/typesGenerated";
 import { type ChatDetailError, chatDetailErrorsEqual } from "./chatError";
 import { applyMessagePartToStreamState } from "./streamState";
-import type { ReconnectState, RetryState, StreamState } from "./types";
+import type {
+	OptimisticUserMessage,
+	ReconnectState,
+	RetryState,
+	StreamState,
+} from "./types";
 
 const buildMessageMap = (
 	messages: readonly TypesGen.ChatMessage[],
@@ -104,6 +109,7 @@ export const isActiveChatStatus = (
 export type ChatStoreState = {
 	messagesByID: Map<number, TypesGen.ChatMessage>;
 	orderedMessageIDs: readonly number[];
+	optimisticUserMessage: OptimisticUserMessage | null;
 	streamState: StreamState | null;
 	chatStatus: TypesGen.ChatStatus | null;
 	streamError: ChatDetailError | null;
@@ -133,6 +139,7 @@ export type ChatStore = {
 		changed: boolean;
 	};
 	upsertDurableMessages: (messages: readonly TypesGen.ChatMessage[]) => void;
+	setOptimisticUserMessage: (message: OptimisticUserMessage | null) => void;
 	applyMessagePart: (part: TypesGen.ChatMessagePart) => void;
 	applyMessageParts: (parts: readonly TypesGen.ChatMessagePart[]) => void;
 	setQueuedMessages: (
@@ -189,6 +196,7 @@ export type ChatStore = {
 const createInitialState = (): ChatStoreState => ({
 	messagesByID: new Map(),
 	orderedMessageIDs: [],
+	optimisticUserMessage: null,
 	streamState: null,
 	chatStatus: null,
 	streamError: null,
@@ -257,20 +265,18 @@ export const createChatStore = (): ChatStore => {
 		const nextMessagesByID = buildMessageMap(safeMessages);
 		const nextOrderedMessageIDs = buildOrderedMessageIDs(safeMessages);
 
-		// Fast-path: skip setState entirely when nothing changed.
-		if (
-			mapsEqualByRef(state.messagesByID, nextMessagesByID) &&
-			arraysEqual(state.orderedMessageIDs, nextOrderedMessageIDs)
-		) {
-			return;
-		}
-
 		setState((current) => {
-			// Re-check equality against `current` inside the updater
-			// to avoid overwriting a concurrent state change.
+			const optimisticUserMessage = safeMessages.some(
+				(message) =>
+					message.client_message_id ===
+					current.optimisticUserMessage?.client_message_id,
+			)
+				? null
+				: current.optimisticUserMessage;
 			if (
 				mapsEqualByRef(current.messagesByID, nextMessagesByID) &&
-				arraysEqual(current.orderedMessageIDs, nextOrderedMessageIDs)
+				arraysEqual(current.orderedMessageIDs, nextOrderedMessageIDs) &&
+				current.optimisticUserMessage === optimisticUserMessage
 			) {
 				return current;
 			}
@@ -278,49 +284,49 @@ export const createChatStore = (): ChatStore => {
 				...current,
 				messagesByID: nextMessagesByID,
 				orderedMessageIDs: nextOrderedMessageIDs,
+				optimisticUserMessage,
 			};
 		});
 	};
 
 	const upsertDurableMessage = (message: TypesGen.ChatMessage) => {
-		// Use `state` for the early-return guard so we can return
-		// the result synchronously. The actual mutation below uses
-		// `current` inside the updater to avoid overwriting a
-		// concurrent state change (TOCTOU).
 		const existing = state.messagesByID.get(message.id);
 		const isDuplicate = state.messagesByID.has(message.id);
-		if (existing && isEqual(existing, message)) {
+		const clearsOptimistic =
+			message.client_message_id ===
+			state.optimisticUserMessage?.client_message_id;
+		if (existing && isEqual(existing, message) && !clearsOptimistic) {
 			return { isDuplicate, changed: false };
 		}
 
-		let actuallyChanged = false;
+		let changed = false;
 		setState((current) => {
-			// Re-check inside the updater: another call may have
-			// already applied this exact message.
-			const curExisting = current.messagesByID.get(message.id);
-			if (curExisting && isEqual(curExisting, message)) {
+			const currentMessage = current.messagesByID.get(message.id);
+			const clearOptimistic =
+				message.client_message_id ===
+				current.optimisticUserMessage?.client_message_id;
+			if (
+				currentMessage &&
+				isEqual(currentMessage, message) &&
+				!clearOptimistic
+			) {
 				return current;
 			}
-
-			actuallyChanged = true;
-
-			const nextMessagesByID = new Map(current.messagesByID);
-			nextMessagesByID.set(message.id, message);
-
-			const curIsDuplicate = current.messagesByID.has(message.id);
-			const needsReorder =
-				!curIsDuplicate || nextMessagesByID.size !== current.messagesByID.size;
-			const nextOrderedMessageIDs = needsReorder
-				? buildOrderedMessageIDs(Array.from(nextMessagesByID.values()))
-				: current.orderedMessageIDs;
-
+			changed = !currentMessage || !isEqual(currentMessage, message);
+			const messagesByID = new Map(current.messagesByID);
+			messagesByID.set(message.id, message);
 			return {
 				...current,
-				messagesByID: nextMessagesByID,
-				orderedMessageIDs: nextOrderedMessageIDs,
+				messagesByID,
+				orderedMessageIDs: currentMessage
+					? current.orderedMessageIDs
+					: buildOrderedMessageIDs(Array.from(messagesByID.values())),
+				optimisticUserMessage: clearOptimistic
+					? null
+					: current.optimisticUserMessage,
 			};
 		});
-		return { isDuplicate, changed: actuallyChanged };
+		return { isDuplicate, changed };
 	};
 
 	// Bulk variant that applies all messages in a single pass —
@@ -332,30 +338,35 @@ export const createChatStore = (): ChatStore => {
 			return;
 		}
 		setState((current) => {
-			let nextMessagesByID: Map<number, TypesGen.ChatMessage> | null = null;
+			let messagesByID: Map<number, TypesGen.ChatMessage> | null = null;
+			let clearOptimistic = false;
 			for (const message of messages) {
-				const map = nextMessagesByID ?? current.messagesByID;
-				const existing = map.get(message.id);
-				if (existing && isEqual(existing, message)) {
-					continue;
+				const existing = (messagesByID ?? current.messagesByID).get(message.id);
+				if (!existing || !isEqual(existing, message)) {
+					messagesByID ??= new Map(current.messagesByID);
+					messagesByID.set(message.id, message);
 				}
-				// Lazily copy the map on first actual change.
-				if (!nextMessagesByID) {
-					nextMessagesByID = new Map(current.messagesByID);
+				if (
+					message.client_message_id ===
+					current.optimisticUserMessage?.client_message_id
+				) {
+					clearOptimistic = true;
 				}
-				nextMessagesByID.set(message.id, message);
 			}
-			if (!nextMessagesByID) {
+			if (!messagesByID && !clearOptimistic) {
 				return current;
 			}
-			const needsReorder = nextMessagesByID.size !== current.messagesByID.size;
-			const nextOrderedMessageIDs = needsReorder
-				? buildOrderedMessageIDs(Array.from(nextMessagesByID.values()))
-				: current.orderedMessageIDs;
+			const nextMessagesByID = messagesByID ?? current.messagesByID;
 			return {
 				...current,
 				messagesByID: nextMessagesByID,
-				orderedMessageIDs: nextOrderedMessageIDs,
+				orderedMessageIDs:
+					nextMessagesByID.size === current.messagesByID.size
+						? current.orderedMessageIDs
+						: buildOrderedMessageIDs(Array.from(nextMessagesByID.values())),
+				optimisticUserMessage: clearOptimistic
+					? null
+					: current.optimisticUserMessage,
 			};
 		});
 	};
@@ -392,6 +403,22 @@ export const createChatStore = (): ChatStore => {
 		replaceMessages,
 		upsertDurableMessage,
 		upsertDurableMessages,
+		setOptimisticUserMessage: (message) => {
+			if (
+				state.optimisticUserMessage === message ||
+				(message &&
+					[...state.messagesByID.values()].some(
+						(durable) =>
+							durable.client_message_id === message.client_message_id,
+					))
+			) {
+				return;
+			}
+			setState((current) => ({
+				...current,
+				optimisticUserMessage: message,
+			}));
+		},
 		applyMessagePart: (part) => applyMessageParts([part]),
 		applyMessageParts,
 		setQueuedMessages: (queuedMessages) => {
@@ -410,6 +437,11 @@ export const createChatStore = (): ChatStore => {
 		},
 		applyAuthoritativeQueuedMessages: (queuedMessages) => {
 			const incoming = queuedMessages ?? [];
+			const clearsOptimisticUserMessage = incoming.some(
+				(message) =>
+					message.client_message_id ===
+					state.optimisticUserMessage?.client_message_id,
+			);
 			for (const message of incoming) {
 				observedQueuedMessageIDs.add(message.id);
 			}
@@ -456,7 +488,12 @@ export const createChatStore = (): ChatStore => {
 						? current.promotedQueuedMessageIDs
 						: new Set<number>();
 				const samePromoted = nextPromoted === current.promotedQueuedMessageIDs;
-				if (sameQueue && sameSuppressed && samePromoted) {
+				if (
+					sameQueue &&
+					sameSuppressed &&
+					samePromoted &&
+					!clearsOptimisticUserMessage
+				) {
 					return current;
 				}
 				return {
@@ -464,6 +501,9 @@ export const createChatStore = (): ChatStore => {
 					queuedMessages: sameQueue ? current.queuedMessages : filtered,
 					suppressedQueuedMessageIDs: nextSuppressed,
 					promotedQueuedMessageIDs: nextPromoted,
+					optimisticUserMessage: clearsOptimisticUserMessage
+						? null
+						: current.optimisticUserMessage,
 				};
 			});
 		},
@@ -591,6 +631,12 @@ export const createChatStore = (): ChatStore => {
 			// Leaving a chat strands any convergence request issued for it, so a
 			// later return to the same chat cannot revive one.
 			queueConvergenceFence++;
+			if (state.optimisticUserMessage) {
+				setState((current) => ({
+					...current,
+					optimisticUserMessage: null,
+				}));
+			}
 		},
 		getActiveChatID: () => activeChatID,
 		getServerChatStatusVersion: () => serverChatStatusVersion,
@@ -721,7 +767,8 @@ export const createChatStore = (): ChatStore => {
 				state.streamError === null &&
 				state.retryState === null &&
 				state.reconnectState === null &&
-				state.subagentStatusOverrides.size === 0
+				state.subagentStatusOverrides.size === 0 &&
+				state.optimisticUserMessage === null
 			) {
 				return;
 			}
@@ -732,6 +779,7 @@ export const createChatStore = (): ChatStore => {
 				retryState: null,
 				reconnectState: null,
 				subagentStatusOverrides: new Map(),
+				optimisticUserMessage: null,
 			}));
 		},
 	};
@@ -740,6 +788,8 @@ export const createChatStore = (): ChatStore => {
 export const selectMessagesByID = (state: ChatStoreState) => state.messagesByID;
 export const selectOrderedMessageIDs = (state: ChatStoreState) =>
 	state.orderedMessageIDs;
+export const selectOptimisticUserMessage = (state: ChatStoreState) =>
+	state.optimisticUserMessage;
 export const selectStreamState = (state: ChatStoreState) => state.streamState;
 export const selectHasStreamState = (state: ChatStoreState) =>
 	state.streamState !== null;

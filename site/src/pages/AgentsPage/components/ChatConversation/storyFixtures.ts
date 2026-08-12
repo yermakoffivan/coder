@@ -83,13 +83,6 @@ export const buildRetryState = (
 	...overrides,
 });
 
-export const textResponseStreamParts = [
-	{
-		type: "text",
-		text: "Storybook streamed answer.",
-	},
-] satisfies readonly TypesGen.ChatMessagePart[];
-
 export const pinFixtureClock = () => {
 	const real = Date.now;
 	Date.now = () => FIXTURE_NOW;

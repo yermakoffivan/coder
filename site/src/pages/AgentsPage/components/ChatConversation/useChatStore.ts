@@ -229,6 +229,7 @@ export const useChatStore = (
 				prevChatIDRef.current = chatID;
 				lastSyncedMessagesRef.current = [];
 				store.replaceMessages([]);
+				store.setOptimisticUserMessage(null);
 			}
 			// Merge REST-fetched messages into the store, preserving
 			// any messages the WebSocket delivered that haven't

@@ -1092,6 +1092,9 @@ var (
 	// accept modifications (messages, edits, promotions, or
 	// tool-result submissions).
 	ErrChatArchived = xerrors.New("chat is archived")
+	// ErrDuplicateClientMessageID indicates the submitted correlation ID is
+	// already present in active history or the queue for the chat.
+	ErrDuplicateClientMessageID = chatstate.ErrDuplicateClientMessageID
 	// ErrNoDefaultChatModelConfig indicates no default chat model config
 	// is configured, so chatd cannot resolve a model for the request.
 	ErrNoDefaultChatModelConfig = xerrors.New("no default chat model config is configured")
@@ -1100,6 +1103,8 @@ var (
 	// boundary, so running a compaction would produce nothing.
 	ErrNothingToCompact = xerrors.New("nothing to compact")
 )
+
+type DuplicateClientMessageIDError = chatstate.DuplicateClientMessageIDError
 
 // CreateOptions controls chat creation in the shared chat mutation path.
 type CreateOptions struct {
@@ -1141,6 +1146,7 @@ const (
 type SendMessageOptions struct {
 	ChatID          uuid.UUID
 	CreatedBy       uuid.UUID
+	ClientMessageID *uuid.UUID
 	Content         []codersdk.ChatMessagePart
 	ModelConfigID   uuid.UUID
 	ReasoningEffort *string
@@ -1353,7 +1359,7 @@ func (p *Server) CreateChat(ctx context.Context, opts CreateOptions) (database.C
 		initialMessages = append(initialMessages, systemMessage(userPromptContent, opts.ModelConfigID))
 	}
 	initialMessages = append(initialMessages, systemMessage(workspaceAwarenessContent, opts.ModelConfigID))
-	initialMessages = append(initialMessages, userMessage(userContent, opts.ModelConfigID, opts.OwnerID, opts.ReasoningEffort))
+	initialMessages = append(initialMessages, userMessage(userContent, opts.ModelConfigID, opts.OwnerID, nil, opts.ReasoningEffort))
 
 	result, err := chatstate.CreateChatWithID(ctx, p.db, p.pubsub, chatID, chatstate.CreateChatInput{
 		OrganizationID:    opts.OrganizationID,
@@ -1536,7 +1542,7 @@ func (p *Server) SendMessage(
 
 		// Queue capacity is enforced inside tx.SendMessage; this
 		// wrapper only propagates the typed error.
-		message := userMessage(content, modelConfigID, messageCreatedBy, opts.ReasoningEffort)
+		message := userMessage(content, modelConfigID, messageCreatedBy, opts.ClientMessageID, opts.ReasoningEffort)
 		sendResult, err := tx.SendMessage(chatstate.SendMessageInput{
 			Message:      message,
 			BusyBehavior: busyBehaviorToChatState(busyBehavior),

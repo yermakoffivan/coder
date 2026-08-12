@@ -25,7 +25,10 @@ import {
 import { getErrorMessage, getErrorStatus, isApiError } from "#/api/errors";
 import { chatProviderConfigs } from "#/api/queries/aiProviders";
 import { checkAuthorization } from "#/api/queries/authCheck";
-import { buildOptimisticEditedMessage } from "#/api/queries/chatMessageEdits";
+import {
+	buildOptimisticChatMessageContent,
+	buildOptimisticEditedMessage,
+} from "#/api/queries/chatMessageEdits";
 import {
 	chat,
 	chatMessagesForInfiniteScroll,
@@ -1397,7 +1400,9 @@ const AgentChatPage: FC = () => {
 			message: getErrorMessage(error, "An unexpected error occurred."),
 			...(detail ? { detail } : {}),
 		};
-		store.setStreamError(reason);
+		if (store.getActiveChatID() === agentId) {
+			store.setStreamError(reason);
+		}
 		setChatErrorReason(agentId, reason);
 	};
 
@@ -1633,6 +1638,9 @@ const AgentChatPage: FC = () => {
 			pendingPlanModeSyncRef.current,
 			pendingWorkspaceSyncRef.current,
 		]);
+		if (store.getActiveChatID() !== agentId) {
+			return;
+		}
 
 		// "/compact" on its own (no attachments or file references)
 		// requests a manual context compaction instead of sending a
@@ -1741,8 +1749,10 @@ const AgentChatPage: FC = () => {
 		}
 
 		const selectedModelConfigID = effectiveSelectedModel || undefined;
+		const clientMessageID = crypto.randomUUID();
 		const request: CreateChatMessageRequestWithClearablePlanMode = {
 			content,
+			client_message_id: clientMessageID,
 			model_config_id: selectedModelConfigID,
 			reasoning_effort: effectiveReasoningEffort,
 			mcp_server_ids:
@@ -1756,6 +1766,17 @@ const AgentChatPage: FC = () => {
 					}
 				: {}),
 		};
+		store.setOptimisticUserMessage({
+			chat_id: agentId,
+			client_message_id: clientMessageID,
+			created_at: new Date().toISOString(),
+			role: "user",
+			content: buildOptimisticChatMessageContent({
+				requestContent: request.content,
+				attachmentMediaTypes: buildAttachmentMediaTypes(attachments),
+			}),
+			model_config_id: selectedModelConfigID,
+		});
 		clearChatErrorReason(agentId);
 		clearStreamError();
 		scrollToBottomRef.current?.();
@@ -1773,6 +1794,9 @@ const AgentChatPage: FC = () => {
 		try {
 			response = await sendMessage(request);
 		} catch (error) {
+			if (store.getActiveChatID() === agentId) {
+				store.setOptimisticUserMessage(null);
+			}
 			handleRequestError(error);
 			// Hook dispatch failures can park an idle chat in error before returning the request error.
 			acceptServerChatStatus();
@@ -1780,6 +1804,26 @@ const AgentChatPage: FC = () => {
 			throw error;
 		}
 		const isActiveChat = store.getActiveChatID() === agentId;
+		if (response.queued) {
+			if (isActiveChat) {
+				store.setOptimisticUserMessage(null);
+			}
+			if (response.queued_message) {
+				const currentQueuedMessages = isActiveChat
+					? store.getSnapshot().queuedMessages
+					: (getCacheQueuedMessages() ?? queuedMessagesBeforeSend);
+				const queuedMessageExists = currentQueuedMessages.some(
+					(message) => message.id === response.queued_message?.id,
+				);
+				const nextQueuedMessages = queuedMessageExists
+					? currentQueuedMessages
+					: [...currentQueuedMessages, response.queued_message];
+				if (isActiveChat) {
+					store.setQueuedMessages(nextQueuedMessages);
+				}
+				setCacheQueuedMessages(nextQueuedMessages);
+			}
+		}
 		// Waiting for the WebSocket on non-queued sends leaves stale stream state visible.
 		if (!response.queued && isActiveChat) {
 			store.clearStreamState();

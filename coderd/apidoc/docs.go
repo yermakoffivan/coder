@@ -17900,6 +17900,10 @@ const docTemplate = `{
                     "type": "string",
                     "format": "uuid"
                 },
+                "client_message_id": {
+                    "type": "string",
+                    "format": "uuid"
+                },
                 "content": {
                     "type": "array",
                     "items": {
@@ -18296,6 +18300,10 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "chat_id": {
+                    "type": "string",
+                    "format": "uuid"
+                },
+                "client_message_id": {
                     "type": "string",
                     "format": "uuid"
                 },
@@ -18850,6 +18858,10 @@ const docTemplate = `{
                             "$ref": "#/definitions/codersdk.ChatBusyBehavior"
                         }
                     ]
+                },
+                "client_message_id": {
+                    "type": "string",
+                    "format": "uuid"
                 },
                 "content": {
                     "type": "array",

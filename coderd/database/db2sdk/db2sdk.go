@@ -1624,12 +1624,13 @@ func ChatMessage(m database.ChatMessage) codersdk.ChatMessage {
 		createdBy = nil
 	}
 	msg := codersdk.ChatMessage{
-		ID:            m.ID,
-		ChatID:        m.ChatID,
-		CreatedBy:     createdBy,
-		ModelConfigID: modelConfigID,
-		CreatedAt:     m.CreatedAt,
-		Role:          codersdk.ChatMessageRole(m.Role),
+		ID:              m.ID,
+		ChatID:          m.ChatID,
+		CreatedBy:       createdBy,
+		ClientMessageID: nullUUIDPtr(m.ClientMessageID),
+		ModelConfigID:   modelConfigID,
+		CreatedAt:       m.CreatedAt,
+		Role:            codersdk.ChatMessageRole(m.Role),
 	}
 	if m.Content.Valid {
 		parts, err := chatMessageParts(m)
@@ -1689,11 +1690,12 @@ func ChatQueuedMessage(message database.ChatQueuedMessage) codersdk.ChatQueuedMe
 	}
 
 	return codersdk.ChatQueuedMessage{
-		ID:            message.ID,
-		ChatID:        message.ChatID,
-		ModelConfigID: nullUUIDPtr(message.ModelConfigID),
-		Content:       parts,
-		CreatedAt:     message.CreatedAt,
+		ID:              message.ID,
+		ChatID:          message.ChatID,
+		ClientMessageID: nullUUIDPtr(message.ClientMessageID),
+		ModelConfigID:   nullUUIDPtr(message.ModelConfigID),
+		Content:         parts,
+		CreatedAt:       message.CreatedAt,
 	}
 }
 

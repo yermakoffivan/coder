@@ -363,6 +363,63 @@ func TestTransitionInputValidation(t *testing.T) {
 	})
 }
 
+func TestSendMessageRejectsDuplicateClientMessageID(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name   string
+		queued bool
+	}{
+		{name: "active durable"},
+		{name: "queued", queued: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			f := newTestFixture(t)
+			ctx := testutil.Context(t, testutil.WaitShort)
+			created := createTestChat(t, f)
+			m := chatstate.NewChatMachine(f.DB, f.Pub, created.Chat.ID)
+			clientMessageID := uuid.New()
+			message := userTextMessage("first submission", f.User.ID, f.Model.ID)
+			message.ClientMessageID = uuid.NullUUID{UUID: clientMessageID, Valid: true}
+
+			if tc.queued {
+				require.NoError(t, m.Update(ctx, func(tx *chatstate.Tx, _ database.Store) error {
+					_, err := tx.SendMessage(chatstate.SendMessageInput{
+						Message:      message,
+						BusyBehavior: chatstate.BusyBehaviorQueue,
+					})
+					return err
+				}))
+			} else {
+				landInW(t, f, m)
+				require.NoError(t, m.Update(ctx, func(tx *chatstate.Tx, _ database.Store) error {
+					_, err := tx.SendMessage(chatstate.SendMessageInput{
+						Message:      message,
+						BusyBehavior: chatstate.BusyBehaviorQueue,
+					})
+					return err
+				}))
+			}
+
+			before := f.readChat(ctx, t, created.Chat.ID)
+			err := m.Update(ctx, func(tx *chatstate.Tx, _ database.Store) error {
+				_, sendErr := tx.SendMessage(chatstate.SendMessageInput{
+					Message:      message,
+					BusyBehavior: chatstate.BusyBehaviorQueue,
+				})
+				return sendErr
+			})
+			require.ErrorIs(t, err, chatstate.ErrDuplicateClientMessageID)
+			var duplicate *chatstate.DuplicateClientMessageIDError
+			require.ErrorAs(t, err, &duplicate)
+			require.Equal(t, clientMessageID, duplicate.ClientMessageID)
+			after := f.readChat(ctx, t, created.Chat.ID)
+			require.Equal(t, before.SnapshotVersion, after.SnapshotVersion)
+		})
+	}
+}
+
 // TestSendMessageQueueCapRejectsQueueAppend seeds a chat with the
 // maximum queued messages and asserts that the next SendMessage in
 // a queue-appending state returns chatstate.ErrMessageQueueFull and
@@ -499,6 +556,8 @@ func TestEditMessageInsertsSuffixMessages(t *testing.T) {
 	m := chatstate.NewChatMachine(f.DB, f.Pub, created.Chat.ID)
 
 	target := userTextMessage("original prompt", f.User.ID, f.Model.ID)
+	clientMessageID := uuid.New()
+	target.ClientMessageID = uuid.NullUUID{UUID: clientMessageID, Valid: true}
 
 	var targetID int64
 	require.NoError(t, m.Update(ctx, func(tx *chatstate.Tx, store database.Store) error {
@@ -534,6 +593,7 @@ func TestEditMessageInsertsSuffixMessages(t *testing.T) {
 	}))
 
 	require.Contains(t, result.DeletedMessageIDs, targetID)
+	require.False(t, result.ReplacementMessage.ClientMessageID.Valid)
 	require.Len(t, result.SuffixMessages, 2)
 	assertChatMessageText(t, result.SuffixMessages[0], "first notice")
 	assertChatMessageText(t, result.SuffixMessages[1], "second notice")
@@ -558,6 +618,7 @@ func TestEditMessageInsertsSuffixMessages(t *testing.T) {
 		result.SuffixMessages[1].ID,
 	}, []int64{tail[0].ID, tail[1].ID, tail[2].ID})
 	assertChatMessageText(t, tail[0], "edited prompt")
+	require.False(t, tail[0].ClientMessageID.Valid)
 	assertChatMessageText(t, tail[1], "first notice")
 	assertChatMessageText(t, tail[2], "second notice")
 

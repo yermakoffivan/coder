@@ -2774,6 +2774,7 @@ func (api *API) postChatMessages(rw http.ResponseWriter, r *http.Request) {
 		chatd.SendMessageOptions{
 			ChatID:          chatID,
 			CreatedBy:       apiKey.UserID,
+			ClientMessageID: req.ClientMessageID,
 			Content:         contentBlocks,
 			ModelConfigID:   modelConfigID,
 			ReasoningEffort: reasoningEffort,
@@ -2792,6 +2793,13 @@ func (api *API) postChatMessages(rw http.ResponseWriter, r *http.Request) {
 		if xerrors.Is(sendErr, chatd.ErrChatArchived) {
 			httpapi.Write(ctx, rw, http.StatusBadRequest, codersdk.Response{
 				Message: "Cannot send messages to an archived chat.",
+			})
+			return
+		}
+		if xerrors.Is(sendErr, chatd.ErrDuplicateClientMessageID) {
+			httpapi.Write(ctx, rw, http.StatusConflict, codersdk.Response{
+				Message: "Client message ID already exists.",
+				Detail:  sendErr.Error(),
 			})
 			return
 		}

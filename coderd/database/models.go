@@ -5132,7 +5132,8 @@ type ChatMessage struct {
 	// Stores the selected effort for the turn triggered by this message.
 	ReasoningEffort NullChatReasoningEffort `db:"reasoning_effort" json:"reasoning_effort"`
 	// Used for full text search. NULL initially, populated async via background job.
-	SearchTsv interface{} `db:"search_tsv" json:"search_tsv"`
+	SearchTsv       interface{}   `db:"search_tsv" json:"search_tsv"`
+	ClientMessageID uuid.NullUUID `db:"client_message_id" json:"client_message_id"`
 }
 
 type ChatModelConfig struct {
@@ -5163,6 +5164,7 @@ type ChatQueuedMessage struct {
 	CreatedBy     uuid.UUID       `db:"created_by" json:"created_by"`
 	// Stores the selected effort until the queued row is promoted.
 	ReasoningEffort NullChatReasoningEffort `db:"reasoning_effort" json:"reasoning_effort"`
+	ClientMessageID uuid.NullUUID           `db:"client_message_id" json:"client_message_id"`
 }
 
 type ChatTable struct {

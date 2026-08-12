@@ -27,10 +27,19 @@ func systemMessage(rawContent pqtype.NullRawMessage, modelConfigID uuid.UUID) ch
 	}
 }
 
-func userMessage(rawContent pqtype.NullRawMessage, modelConfigID, createdBy uuid.UUID, reasoningEffort *string) chatstate.Message {
+func userMessage(
+	rawContent pqtype.NullRawMessage,
+	modelConfigID, createdBy uuid.UUID,
+	clientMessageID *uuid.UUID,
+	reasoningEffort *string,
+) chatstate.Message {
 	var effort database.NullChatReasoningEffort
 	if reasoningEffort != nil && *reasoningEffort != "" {
 		effort = database.NullChatReasoningEffort{ChatReasoningEffort: database.ChatReasoningEffort(*reasoningEffort), Valid: true}
+	}
+	var clientID uuid.NullUUID
+	if clientMessageID != nil {
+		clientID = uuid.NullUUID{UUID: *clientMessageID, Valid: true}
 	}
 	return chatstate.Message{
 		Role:            database.ChatMessageRoleUser,
@@ -39,6 +48,7 @@ func userMessage(rawContent pqtype.NullRawMessage, modelConfigID, createdBy uuid
 		ModelConfigID:   uuid.NullUUID{UUID: modelConfigID, Valid: modelConfigID != uuid.Nil},
 		ReasoningEffort: effort,
 		CreatedBy:       uuid.NullUUID{UUID: createdBy, Valid: createdBy != uuid.Nil},
+		ClientMessageID: clientID,
 		ContentVersion:  chatprompt.CurrentContentVersion,
 	}
 }

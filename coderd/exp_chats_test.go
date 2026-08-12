@@ -7106,6 +7106,126 @@ func waitForChatWatchStatusChangeEvent(
 	}
 }
 
+func TestSendMessagePreservesClientMessageID(t *testing.T) {
+	t.Parallel()
+
+	ctx := testutil.Context(t, testutil.WaitLong)
+	client, db := newChatClientWithDatabase(t, withChatWorkerDisabled)
+	user := coderdtest.CreateFirstUser(t, client.Client)
+	modelConfig := createChatModelConfig(t, client)
+	chat := dbgen.Chat(t, db, database.Chat{
+		OrganizationID:    user.OrganizationID,
+		OwnerID:           user.UserID,
+		LastModelConfigID: modelConfig.ID,
+		Title:             "client message correlation",
+	})
+	clientMessageID := uuid.New()
+
+	resp, err := client.CreateChatMessage(ctx, chat.ID, codersdk.CreateChatMessageRequest{
+		Content: []codersdk.ChatInputPart{{
+			Type: codersdk.ChatInputPartTypeText,
+			Text: "correlate this message",
+		}},
+		ClientMessageID: &clientMessageID,
+	})
+	require.NoError(t, err)
+	require.False(t, resp.Queued)
+	require.NotNil(t, resp.Message)
+	require.NotNil(t, resp.Message.ClientMessageID)
+	require.Equal(t, clientMessageID, *resp.Message.ClientMessageID)
+	require.Len(t, resp.Messages, 1)
+	require.NotNil(t, resp.Messages[0].ClientMessageID)
+	require.Equal(t, clientMessageID, *resp.Messages[0].ClientMessageID)
+
+	messagesResult, err := client.GetChatMessages(ctx, chat.ID, nil)
+	require.NoError(t, err)
+	require.Len(t, messagesResult.Messages, 1)
+	require.NotNil(t, messagesResult.Messages[0].ClientMessageID)
+	require.Equal(t, clientMessageID, *messagesResult.Messages[0].ClientMessageID)
+
+	events, closer, err := client.StreamChat(ctx, chat.ID, nil)
+	require.NoError(t, err)
+	defer closer.Close()
+	for {
+		select {
+		case <-ctx.Done():
+			require.FailNow(t, "timed out waiting for correlated stream message")
+		case event, ok := <-events:
+			require.True(t, ok, "stream closed before correlated message")
+			if event.Type != codersdk.ChatStreamEventTypeMessage || event.Message == nil {
+				continue
+			}
+			require.NotNil(t, event.Message.ClientMessageID)
+			require.Equal(t, clientMessageID, *event.Message.ClientMessageID)
+			return
+		}
+	}
+}
+
+func TestSendMessageRejectsDuplicateClientMessageID(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name   string
+		queued bool
+	}{
+		{name: "active durable"},
+		{name: "queued", queued: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			ctx := testutil.Context(t, testutil.WaitLong)
+			client, db := newChatClientWithDatabase(t, withChatWorkerDisabled)
+			user := coderdtest.CreateFirstUser(t, client.Client)
+			modelConfig := createChatModelConfig(t, client)
+			chat := dbgen.Chat(t, db, database.Chat{
+				OrganizationID:    user.OrganizationID,
+				OwnerID:           user.UserID,
+				LastModelConfigID: modelConfig.ID,
+				Title:             "duplicate client message correlation",
+			})
+			if tc.queued {
+				_, err := db.UpdateChatStatus(dbauthz.AsSystemRestricted(ctx), database.UpdateChatStatusParams{
+					ID:          chat.ID,
+					Status:      database.ChatStatusRunning,
+					WorkerID:    uuid.NullUUID{UUID: uuid.New(), Valid: true},
+					StartedAt:   sql.NullTime{Time: time.Now(), Valid: true},
+					HeartbeatAt: sql.NullTime{Time: time.Now(), Valid: true},
+				})
+				require.NoError(t, err)
+			}
+
+			clientMessageID := uuid.New()
+			req := codersdk.CreateChatMessageRequest{
+				Content: []codersdk.ChatInputPart{{
+					Type: codersdk.ChatInputPartTypeText,
+					Text: "submit once",
+				}},
+				ClientMessageID: &clientMessageID,
+				BusyBehavior:    codersdk.ChatBusyBehaviorQueue,
+			}
+			first, err := client.CreateChatMessage(ctx, chat.ID, req)
+			require.NoError(t, err)
+			require.Equal(t, tc.queued, first.Queued)
+
+			_, err = client.CreateChatMessage(ctx, chat.ID, req)
+			sdkErr := requireSDKError(t, err, http.StatusConflict)
+			require.Equal(t, "Client message ID already exists.", sdkErr.Message)
+			require.Contains(t, sdkErr.Detail, clientMessageID.String())
+
+			messages, err := client.GetChatMessages(ctx, chat.ID, nil)
+			require.NoError(t, err)
+			if tc.queued {
+				require.Len(t, messages.QueuedMessages, 1)
+				require.Empty(t, messages.Messages)
+			} else {
+				require.Len(t, messages.Messages, 1)
+				require.Empty(t, messages.QueuedMessages)
+			}
+		})
+	}
+}
+
 func TestSendMessageWithModelOverrideUpdatesLastModelConfigID(t *testing.T) {
 	t.Parallel()
 
@@ -7258,21 +7378,33 @@ func TestSendMessageQueuesReasoningEffort(t *testing.T) {
 	})
 	require.NoError(t, err)
 
+	clientMessageID := uuid.New()
 	resp, err := client.CreateChatMessage(ctx, chat.ID, codersdk.CreateChatMessageRequest{
 		Content: []codersdk.ChatInputPart{{
 			Type: codersdk.ChatInputPartTypeText,
 			Text: "queue this with effort",
 		}},
+		ClientMessageID: &clientMessageID,
 		ReasoningEffort: ptr.Ref("high"),
 		BusyBehavior:    codersdk.ChatBusyBehaviorQueue,
 	})
 	require.NoError(t, err)
 	require.True(t, resp.Queued)
 	require.NotNil(t, resp.QueuedMessage)
+	require.NotNil(t, resp.QueuedMessage.ClientMessageID)
+	require.Equal(t, clientMessageID, *resp.QueuedMessage.ClientMessageID)
 	queuedMessages, err := db.GetChatQueuedMessages(dbauthz.AsSystemRestricted(ctx), chat.ID)
 	require.NoError(t, err)
 	require.Len(t, queuedMessages, 1)
+	require.True(t, queuedMessages[0].ClientMessageID.Valid)
+	require.Equal(t, clientMessageID, queuedMessages[0].ClientMessageID.UUID)
 	require.True(t, queuedMessages[0].ReasoningEffort.Valid)
+
+	messagesResult, err := client.GetChatMessages(ctx, chat.ID, nil)
+	require.NoError(t, err)
+	require.Len(t, messagesResult.QueuedMessages, 1)
+	require.NotNil(t, messagesResult.QueuedMessages[0].ClientMessageID)
+	require.Equal(t, clientMessageID, *messagesResult.QueuedMessages[0].ClientMessageID)
 	require.Equal(t, database.ChatReasoningEffortHigh, queuedMessages[0].ReasoningEffort.ChatReasoningEffort)
 
 	storedChat, err := db.GetChatByID(dbauthz.AsSystemRestricted(ctx), chat.ID)
@@ -8446,6 +8578,49 @@ func TestPatchChatMessage(t *testing.T) {
 		}
 		require.True(t, foundEditedInChat)
 		require.False(t, foundOriginalInChat)
+	})
+
+	t.Run("ClearsClientMessageID", func(t *testing.T) {
+		t.Parallel()
+
+		ctx := testutil.Context(t, testutil.WaitLong)
+		client, db := newChatClientWithDatabase(t, withChatWorkerDisabled)
+		firstUser := coderdtest.CreateFirstUser(t, client.Client)
+		modelConfig := createChatModelConfig(t, client)
+		chat := dbgen.Chat(t, db, database.Chat{
+			OrganizationID:    firstUser.OrganizationID,
+			OwnerID:           firstUser.UserID,
+			LastModelConfigID: modelConfig.ID,
+			Title:             "edit client message correlation",
+		})
+		clientMessageID := uuid.New()
+
+		created, err := client.CreateChatMessage(ctx, chat.ID, codersdk.CreateChatMessageRequest{
+			Content: []codersdk.ChatInputPart{{
+				Type: codersdk.ChatInputPartTypeText,
+				Text: "before correlated edit",
+			}},
+			ClientMessageID: &clientMessageID,
+		})
+		require.NoError(t, err)
+		require.NotNil(t, created.Message)
+		require.NotNil(t, created.Message.ClientMessageID)
+		require.Equal(t, clientMessageID, *created.Message.ClientMessageID)
+
+		edited, err := client.EditChatMessage(ctx, chat.ID, created.Message.ID, codersdk.EditChatMessageRequest{
+			Content: []codersdk.ChatInputPart{{
+				Type: codersdk.ChatInputPartTypeText,
+				Text: "after correlated edit",
+			}},
+		})
+		require.NoError(t, err)
+		require.NotEqual(t, created.Message.ID, edited.Message.ID)
+		require.Nil(t, edited.Message.ClientMessageID)
+
+		messages, err := client.GetChatMessages(ctx, chat.ID, nil)
+		require.NoError(t, err)
+		require.Len(t, messages.Messages, 1)
+		require.Nil(t, messages.Messages[0].ClientMessageID)
 	})
 
 	t.Run("ReasoningEffort", func(t *testing.T) {
@@ -10420,7 +10595,18 @@ func TestPromoteChatQueuedMessage(t *testing.T) {
 			codersdk.ChatMessageText(queuedText),
 		})
 		require.NoError(t, err)
-		queuedMessage := insertTestChatQueuedMessage(ctx, t, db, chat.ID, queuedContent, chat.LastModelConfigID)
+		clientMessageID := uuid.New()
+		queuedMessage, err := db.InsertChatQueuedMessageWithCreator(
+			dbauthz.AsSystemRestricted(ctx),
+			database.InsertChatQueuedMessageWithCreatorParams{
+				ChatID:          chat.ID,
+				Content:         queuedContent,
+				ClientMessageID: uuid.NullUUID{UUID: clientMessageID, Valid: true},
+				ModelConfigID:   uuid.NullUUID{UUID: chat.LastModelConfigID, Valid: true},
+				CreatedBy:       user.UserID,
+			},
+		)
+		require.NoError(t, err)
 
 		promoteRes, err := client.Request(
 			ctx,
@@ -10450,6 +10636,8 @@ func TestPromoteChatQueuedMessage(t *testing.T) {
 			for _, part := range msg.Content {
 				if part.Type == codersdk.ChatMessagePartTypeText && part.Text == queuedText {
 					foundPromoted = true
+					require.NotNil(t, msg.ClientMessageID)
+					require.Equal(t, clientMessageID, *msg.ClientMessageID)
 				}
 			}
 		}

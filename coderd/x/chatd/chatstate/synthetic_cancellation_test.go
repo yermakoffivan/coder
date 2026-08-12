@@ -145,11 +145,14 @@ func testSendMessageDirectWSynthesizesToolCancellations(t *testing.T) {
 	// SendMessage with a fresh user message. The direct-history path
 	// must insert a synthetic tool-result (for callID) followed by
 	// the new user message.
+	clientMessageID := uuid.New()
+	message := userTextMessage("after-cancel", f.User.ID, f.Model.ID)
+	message.ClientMessageID = uuid.NullUUID{UUID: clientMessageID, Valid: true}
 	var send chatstate.SendMessageResult
 	require.NoError(t, m.Update(ctx, func(tx *chatstate.Tx, store database.Store) error {
 		var err error
 		send, err = tx.SendMessage(chatstate.SendMessageInput{
-			Message:      userTextMessage("after-cancel", f.User.ID, f.Model.ID),
+			Message:      message,
 			BusyBehavior: chatstate.BusyBehaviorQueue,
 		})
 		return err
@@ -157,7 +160,10 @@ func testSendMessageDirectWSynthesizesToolCancellations(t *testing.T) {
 
 	require.Len(t, send.InsertedMessages, 2, "synthetic cancel + new user")
 	assertToolResultForCall(t, send.InsertedMessages[0], callID)
+	require.False(t, send.InsertedMessages[0].ClientMessageID.Valid)
 	require.Equal(t, database.ChatMessageRoleUser, send.InsertedMessages[1].Role)
+	require.True(t, send.InsertedMessages[1].ClientMessageID.Valid)
+	require.Equal(t, clientMessageID, send.InsertedMessages[1].ClientMessageID.UUID)
 	require.Less(t, send.InsertedMessages[0].ID, send.InsertedMessages[1].ID,
 		"synthetic cancel is inserted before the user message")
 }
